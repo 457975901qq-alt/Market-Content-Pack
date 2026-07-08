@@ -158,6 +158,24 @@ tail -n 100 logs/market_content_errors.log
 ls -lh outputs/market_content/
 ```
 
+## 运行结果通知
+
+`notify_market_result.sh` 会在统一运行脚本结束后发送 macOS 通知，并写入：
+
+```text
+logs/notification.log
+```
+
+手动测试通知：
+
+```bash
+bash notify_market_result.sh success
+bash notify_market_result.sh failure
+bash run_market_content_pack.sh
+```
+
+成功通知会显示最新图片路径；失败通知会提示检查 `logs/scheduler_run.log` 和 `logs/market_content_errors.log`。如果 `osascript` 不可用或系统通知权限未开启，通知失败只会写入日志，不会改变主流程退出码。
+
 ## outputs 目录
 
 `outputs/` 保存生成的 JSON、Markdown 和图片产物，只作为本地运行结果使用，不提交到 Git。需要重新生成时运行对应脚本即可。
