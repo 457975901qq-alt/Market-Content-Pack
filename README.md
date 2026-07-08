@@ -35,6 +35,48 @@ export OPENAI_MODEL="gpt-5"
 - `timezone` 必须是 `Asia/Tokyo`。
 - API 无返回、空字符串、JSON 解析失败、关键字段缺失、日期不一致时，不生成图片，不发送到任何平台。
 
+## 图片输出规范
+
+`render_market_pack_calm_20260708.py` 是当前图片生成入口。图片只读取 JSON 中的 `image_text` 字段：
+
+```json
+{
+  "image_text": {
+    "title": "string",
+    "subtitle": "string",
+    "sections": [
+      {
+        "heading": "string",
+        "content": "string"
+      }
+    ]
+  }
+}
+```
+
+图片不会渲染以下内容：
+
+- `douyin.title`
+- `douyin.cover_title`
+- `douyin.caption`
+- `douyin.hashtags`
+- 公众号文案
+- X 文案
+- 任何平台发布说明
+
+默认图片尺寸为竖版 `1080 × 1920`。当 `image_text.sections` 内容较多时，会自动分页生成多张图片，文件名格式：
+
+```text
+outputs/market_content/market_pack_YYYYMMDD_HHMM_01.png
+outputs/market_content/market_pack_YYYYMMDD_HHMM_02.png
+```
+
+平台文案继续单独保存为 Markdown 文件，例如：
+
+```text
+outputs/market_content/douyin.md
+```
+
 测试本地 JSON 校验：
 
 ```bash
@@ -174,44 +216,7 @@ bash notify_market_result.sh failure
 bash run_market_content_pack.sh
 ```
 
-成功通知会显示最新图片路径；失败通知会提示检查 `logs/scheduler_run.log` 和 `logs/market_content_errors.log`。如果 `osascript` 不可用或系统通知权限未开启，通知失败只会写入日志，不会改变主流程退出码。
-
-## Telegram 图片发送
-
-`send_market_image_telegram.py` 会在内容包成功生成后，把最新图片发送到 Telegram。脚本优先查找 `outputs/market_content/`，如果没有图片，会退回查找整个 `outputs/` 目录。支持：
-
-- `.png`
-- `.jpg`
-- `.jpeg`
-- `.webp`
-
-`.env` 配置示例：
-
-```bash
-TELEGRAM_BOT_TOKEN=<your-telegram-bot-token>
-TELEGRAM_CHAT_ID=<your-telegram-chat-id>
-```
-
-不要把真实 token 或 chat id 提交到 Git。`.env` 已被 `.gitignore` 排除。
-
-手动测试：
-
-```bash
-python3 send_market_image_telegram.py
-```
-
-日志：
-
-```text
-logs/telegram_send.log
-```
-
-常见错误：
-
-- `TELEGRAM_BOT_TOKEN is missing`：没有配置 Bot Token。
-- `TELEGRAM_CHAT_ID is missing`：没有配置 Chat ID。
-- `no image found under outputs/market_content or outputs`：没有可发送图片。
-- Telegram API 返回失败：检查 bot 是否已添加到目标 chat、chat id 是否正确、网络是否可访问。
+成功通知会显示已生成图片张数和 `outputs/market_content/` 目录；失败通知会提示检查 `logs/scheduler_run.log` 和 `logs/market_content_errors.log`。如果 `osascript` 不可用或系统通知权限未开启，通知失败只会写入日志，不会改变主流程退出码。
 
 ## outputs 目录
 

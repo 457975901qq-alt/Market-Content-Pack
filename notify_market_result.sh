@@ -4,6 +4,7 @@ set -u
 PROJECT_DIR="/Users/ara/Documents/新闻搜索"
 LOG_DIR="$PROJECT_DIR/logs"
 OUTPUT_DIR="$PROJECT_DIR/outputs"
+MARKET_OUTPUT_DIR="$OUTPUT_DIR/market_content"
 NOTIFICATION_LOG="$LOG_DIR/notification.log"
 STATUS="${1:-}"
 
@@ -18,13 +19,17 @@ log_line() {
 }
 
 latest_image() {
-  find "$OUTPUT_DIR" -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.webp' \) -print 2>/dev/null \
+  find "$MARKET_OUTPUT_DIR" -type f \( -name 'market_pack_*.png' -o -name 'market_pack_*.jpg' -o -name 'market_pack_*.jpeg' -o -name 'market_pack_*.webp' \) -print 2>/dev/null \
     | while IFS= read -r path; do
         printf '%s\t%s\n' "$(stat -f '%m' "$path" 2>/dev/null || stat -c '%Y' "$path" 2>/dev/null)" "$path"
       done \
     | sort -nr \
     | head -n 1 \
     | cut -f2-
+}
+
+image_count() {
+  find "$MARKET_OUTPUT_DIR" -type f \( -name 'market_pack_*.png' -o -name 'market_pack_*.jpg' -o -name 'market_pack_*.jpeg' -o -name 'market_pack_*.webp' \) -print 2>/dev/null | wc -l | tr -d ' '
 }
 
 send_notification() {
@@ -52,12 +57,14 @@ fi
 
 NOW="$(timestamp)"
 IMAGE_PATH="$(latest_image)"
+IMAGE_COUNT="$(image_count)"
 NOTIFY_OK="false"
 
 if [ "$STATUS" = "success" ]; then
   TITLE="每日市场内容包生成成功"
   BODY="时间：$NOW
-图片：${IMAGE_PATH:-未找到图片}"
+已生成 ${IMAGE_COUNT:-0} 张图片
+路径：outputs/market_content/"
 else
   TITLE="每日市场内容包生成失败"
   BODY="时间：$NOW
@@ -70,6 +77,6 @@ else
   echo "[$NOW] notification failed for status=$STATUS" >&2
 fi
 
-log_line "type=$STATUS notification_success=$NOTIFY_OK latest_image=${IMAGE_PATH:-}"
+log_line "type=$STATUS notification_success=$NOTIFY_OK image_count=${IMAGE_COUNT:-0} latest_image=${IMAGE_PATH:-}"
 
 exit 0
