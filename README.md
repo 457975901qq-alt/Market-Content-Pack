@@ -90,6 +90,12 @@ export GITHUB_TOKEN="<your-github-token>"
 
 ## 运行
 
+完整运行每日市场内容包：
+
+```bash
+bash run_market_content_pack.sh
+```
+
 只刷新 GitHub AI 项目数据：
 
 ```bash
@@ -109,6 +115,49 @@ python3 build_daily_market_pack.py
 
 `build_daily_market_pack.py` 会先尝试刷新 GitHub 数据源，再渲染图片。如果 `GITHUB_TOKEN` 缺失或 GitHub API 调用失败，会写入错误日志，并用 fallback 项目继续生成图片。
 
+## 定时运行
+
+项目提供 `run_market_content_pack.sh` 作为统一运行入口。脚本会：
+
+- 自动进入项目目录。
+- 读取本地 `.env`（如果存在）。
+- 使用 `PYTHON_BIN` 指定的 Python，默认 `/usr/bin/python3`。
+- 运行 `build_daily_market_pack.py`。
+- 使用 `tmp/market_content.lock` 防止并发触发。
+- 将输出写入 `logs/scheduler_run.log`。
+
+launchd 配置文件：
+
+```text
+~/Library/LaunchAgents/com.market.content.pack.plist
+```
+
+由于当前项目位于 macOS 受隐私保护的 `Documents` 目录，LaunchAgent 可能无法读取项目文件或写入项目 `logs/`。如果 `logs/launchd_stderr.log` 出现 `Operation not permitted`，需要二选一：
+
+- 在系统设置中给 `/bin/bash` 和 `/usr/bin/python3` 授权 Full Disk Access。
+- 将项目迁移到非隐私保护目录，例如 `~/market-content-pack`，并同步更新 `run_market_content_pack.sh` 和 plist 中的项目路径。
+
+每天触发时间：
+
+- 06:30 Asia/Tokyo
+- 17:30 Asia/Tokyo
+
+加载和测试：
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.market.content.pack.plist
+launchctl start com.market.content.pack
+launchctl list | grep market
+```
+
+结果检查：
+
+```bash
+tail -n 100 logs/scheduler_run.log
+tail -n 100 logs/market_content_errors.log
+ls -lh outputs/market_content/
+```
+
 ## outputs 目录
 
 `outputs/` 保存生成的 JSON、Markdown 和图片产物，只作为本地运行结果使用，不提交到 Git。需要重新生成时运行对应脚本即可。
@@ -119,6 +168,8 @@ python3 build_daily_market_pack.py
 
 ```text
 logs/error.log
+logs/scheduler_run.log
+logs/market_content_errors.log
 ```
 
 日志可能包含错误堆栈和失败关键词，但不会记录 `GITHUB_TOKEN`。
