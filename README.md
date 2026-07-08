@@ -176,6 +176,43 @@ bash run_market_content_pack.sh
 
 成功通知会显示最新图片路径；失败通知会提示检查 `logs/scheduler_run.log` 和 `logs/market_content_errors.log`。如果 `osascript` 不可用或系统通知权限未开启，通知失败只会写入日志，不会改变主流程退出码。
 
+## Telegram 图片发送
+
+`send_market_image_telegram.py` 会在内容包成功生成后，把最新图片发送到 Telegram。脚本优先查找 `outputs/market_content/`，如果没有图片，会退回查找整个 `outputs/` 目录。支持：
+
+- `.png`
+- `.jpg`
+- `.jpeg`
+- `.webp`
+
+`.env` 配置示例：
+
+```bash
+TELEGRAM_BOT_TOKEN=<your-telegram-bot-token>
+TELEGRAM_CHAT_ID=<your-telegram-chat-id>
+```
+
+不要把真实 token 或 chat id 提交到 Git。`.env` 已被 `.gitignore` 排除。
+
+手动测试：
+
+```bash
+python3 send_market_image_telegram.py
+```
+
+日志：
+
+```text
+logs/telegram_send.log
+```
+
+常见错误：
+
+- `TELEGRAM_BOT_TOKEN is missing`：没有配置 Bot Token。
+- `TELEGRAM_CHAT_ID is missing`：没有配置 Chat ID。
+- `no image found under outputs/market_content or outputs`：没有可发送图片。
+- Telegram API 返回失败：检查 bot 是否已添加到目标 chat、chat id 是否正确、网络是否可访问。
+
 ## outputs 目录
 
 `outputs/` 保存生成的 JSON、Markdown 和图片产物，只作为本地运行结果使用，不提交到 Git。需要重新生成时运行对应脚本即可。

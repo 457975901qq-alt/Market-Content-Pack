@@ -8,6 +8,7 @@ LOG_FILE="$LOG_DIR/scheduler_run.log"
 LOCK_DIR="$TMP_DIR/market_content.lock"
 ENV_FILE="$PROJECT_DIR/.env"
 NOTIFY_SCRIPT="$PROJECT_DIR/notify_market_result.sh"
+TELEGRAM_SCRIPT="$PROJECT_DIR/send_market_image_telegram.py"
 
 mkdir -p "$LOG_DIR" "$TMP_DIR"
 exec >> "$LOG_FILE" 2>&1
@@ -56,6 +57,23 @@ if [ "$BUILD_STATUS" -eq 0 ]; then
     bash "$NOTIFY_SCRIPT" success || echo "[$(timestamp)] success notification failed"
   else
     echo "[$(timestamp)] notification script not executable: $NOTIFY_SCRIPT"
+  fi
+  if [ -f "$TELEGRAM_SCRIPT" ]; then
+    echo "[$(timestamp)] sending latest image to Telegram"
+    set +e
+    "$PYTHON_BIN" "$TELEGRAM_SCRIPT"
+    TELEGRAM_STATUS=$?
+    set -e
+    if [ "$TELEGRAM_STATUS" -ne 0 ]; then
+      echo "[$(timestamp)] Telegram send failed with status $TELEGRAM_STATUS"
+      if [ -x "$NOTIFY_SCRIPT" ]; then
+        bash "$NOTIFY_SCRIPT" failure || echo "[$(timestamp)] Telegram failure notification failed"
+      fi
+      exit "$TELEGRAM_STATUS"
+    fi
+    echo "[$(timestamp)] Telegram send completed successfully"
+  else
+    echo "[$(timestamp)] Telegram script not found: $TELEGRAM_SCRIPT"
   fi
   exit 0
 fi
