@@ -1,6 +1,47 @@
 # 每日市场内容包
 
-本项目生成中文每日市场内容包图片简报，并把平台发布文案作为线程文字单独发送。
+本项目生成中文每日市场内容包：文字内容由结构化 JSON 统一管理，图片包由程序渲染，平台配文作为独立文本输出。
+
+## 当前图片包规范
+
+新版图片流程固定输出 **9 张 PNG**：
+
+1. 封面
+2. 市场总览
+3. 宏观数据与全球央行
+4. 大宗商品与地缘政治
+5. AI 与半导体
+6. 大型科技与重点资产
+7. 事件日历与 OPEX
+8. ETF 资金流与市场结构
+9. GitHub 热门 AI 项目与本周总结
+
+所有图片统一为：
+
+- 1080×1920
+- 9:16 竖版
+- 暖白橙黑编辑杂志风
+- 四周保留安全区
+- 数据页统一品牌栏、页码、主标题、一句结论和橙色装饰线
+- 数据缺失时显示“待核验”或“暂无可靠数据”，不得编造数值
+
+设计配置集中在：
+
+```text
+market_pack_design.py
+```
+
+新版渲染器：
+
+```text
+render_market_pack_unified.py
+```
+
+生成后质量检查：
+
+```text
+validate_market_image_pack.py
+```
 
 ## OpenAI 市场内容 JSON
 
@@ -41,23 +82,6 @@ export OPENAI_MODEL="gpt-5"
 python3 market_content_openai.py --raw-response-file /tmp/market_content_valid.json
 ```
 
-成功路径测试示例：
-
-```bash
-python3 market_content_openai.py --raw-response-file /tmp/market_content_tests/valid.json
-python3 render_market_pack_calm_20260708.py
-```
-
-失败路径测试示例：
-
-```bash
-python3 market_content_openai.py --raw-response-file /tmp/market_content_tests/empty.json
-python3 market_content_openai.py --raw-response-file /tmp/market_content_tests/invalid_json.txt
-python3 market_content_openai.py --raw-response-file /tmp/market_content_tests/missing_fields.json
-python3 market_content_openai.py --raw-response-file /tmp/market_content_tests/wrong_date.json
-python3 market_content_openai.py --raw-response-file /tmp/market_content_tests/blank_content.json
-```
-
 ## GitHub AI 开源项目数据源
 
 `github_ai_projects.py` 使用 GitHub REST API `search/repositories` 抓取热门 AI 开源项目，并输出 JSON 与 Markdown。
@@ -76,49 +100,57 @@ python3 market_content_openai.py --raw-response-file /tmp/market_content_tests/b
 - 过滤 `description` 为空的仓库。
 - 提取 `name`、`full_name`、`html_url`、`description`、`stargazers_count`、`forks_count`、`language`、`topics`、`updated_at`。
 - 按 stars、forks、更新时间和关键词相关度综合排序。
-- 最终筛选 3 个项目进入每日市场内容包的“AI开源项目”板块。
+- 最终筛选 3 个项目进入每日市场内容包的 AI 开源项目板块。
 
-## 配置 GITHUB_TOKEN
-
-不要把 API Key 写入代码或提交到仓库。运行前在 shell 环境中配置：
+配置：
 
 ```bash
 export GITHUB_TOKEN="<your-github-token>"
 ```
 
-建议使用只读权限 token。当前脚本只调用公开的 GitHub REST API 搜索接口，不需要仓库写权限。
-
-## 运行
-
-只刷新 GitHub AI 项目数据：
-
-```bash
-python3 github_ai_projects.py
-```
-
-输出文件：
-
-- `outputs/github_ai_projects/ai_open_source_projects.json`
-- `outputs/github_ai_projects/ai_open_source_projects.md`
-
-生成每日市场内容包图片：
+## 运行完整流程
 
 ```bash
 python3 build_daily_market_pack.py
 ```
 
-`build_daily_market_pack.py` 会先尝试刷新 GitHub 数据源，再渲染图片。如果 `GITHUB_TOKEN` 缺失或 GitHub API 调用失败，会写入错误日志，并用 fallback 项目继续生成图片。
+执行顺序：
+
+1. 生成并校验市场内容 JSON。
+2. 刷新 GitHub AI 项目数据；失败时记录日志，不虚构项目数据。
+3. 生成统一标题系统的 9 张图片。
+4. 检查页数、顺序、PNG 格式和 1080×1920 尺寸。
+5. 任一步失败即返回非零退出码，阻止正式发送。
+
+只重新渲染图片：
+
+```bash
+python3 render_market_pack_unified.py
+python3 validate_market_image_pack.py
+```
+
+图片输出：
+
+```text
+outputs/market_image_pack/
+```
+
+清单：
+
+```text
+outputs/market_image_pack/manifest.json
+```
+
+图片错误日志：
+
+```text
+logs/market_image_pack_errors.log
+```
+
+## 旧版渲染器
+
+`render_market_pack_calm_20260708.py` 暂时保留用于回退和对照，但完整构建入口已切换到 `render_market_pack_unified.py`。
 
 ## outputs 目录
 
 `outputs/` 保存生成的 JSON、Markdown 和图片产物，只作为本地运行结果使用，不提交到 Git。需要重新生成时运行对应脚本即可。
-
-## 错误日志
-
-错误日志路径：
-
-```text
-logs/error.log
-```
-
-日志可能包含错误堆栈和失败关键词，但不会记录 `GITHUB_TOKEN`。
