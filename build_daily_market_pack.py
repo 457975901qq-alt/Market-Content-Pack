@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the daily market pack with optional GitHub AI project data refresh."""
+"""Build and validate the daily market content and 9-page image pack."""
 
 from __future__ import annotations
 
@@ -32,14 +32,22 @@ def run_step(cmd: list[str], required: bool = True) -> int:
 
 
 def main() -> int:
-    market_content_status = run_step([sys.executable, "market_content_openai.py"], required=True)
-    if market_content_status != 0:
-        return market_content_status
+    # 1. Generate and validate the only content source.
+    status = run_step([sys.executable, "market_content_openai.py"], required=True)
+    if status != 0:
+        return status
 
-    # GitHub data improves the AI open-source section, but rendering should still
-    # complete with fallback projects if the token is missing or the API fails.
+    # 2. GitHub data enriches page 09. Failure is recorded; renderer uses a
+    # conservative missing-data state and never invents project metrics.
     run_step([sys.executable, "github_ai_projects.py"], required=False)
-    return run_step([sys.executable, "render_market_pack_calm_20260708.py"], required=True)
+
+    # 3. Render the unified 1080x1920, 9-page pack.
+    status = run_step([sys.executable, "render_market_pack_unified.py"], required=True)
+    if status != 0:
+        return status
+
+    # 4. Block publication unless every page passes structural QA.
+    return run_step([sys.executable, "validate_market_image_pack.py"], required=True)
 
 
 if __name__ == "__main__":
