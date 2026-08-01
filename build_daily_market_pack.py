@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,36 @@ def run_step(cmd: list[str], required: bool = True) -> int:
     return 0
 
 
+def split_combined_image_if_configured() -> int:
+    """Split a generated 2x4 sheet only when its exact path is provided.
+
+    Requiring an explicit path prevents the post-processor from accidentally
+    treating an already-independent page as a contact sheet.
+    """
+    source = os.getenv("MARKET_PACK_COMBINED_IMAGE", "").strip()
+    if not source:
+        return 0
+
+    source_path = Path(source).expanduser()
+    if not source_path.is_absolute():
+        source_path = ROOT / source_path
+
+    output_dir = os.getenv(
+        "MARKET_PACK_PAGE_OUTPUT_DIR",
+        str(ROOT / "outputs" / "market_pack_pages"),
+    )
+    cmd = [
+        sys.executable,
+        "split_market_pack.py",
+        str(source_path),
+        "--output-dir",
+        output_dir,
+    ]
+    if os.getenv("MARKET_PACK_REMOVE_COMBINED", "0") == "1":
+        cmd.append("--remove-source")
+    return run_step(cmd, required=True)
+
+
 def main() -> int:
     market_content_status = run_step([sys.executable, "market_content_openai.py"], required=True)
     if market_content_status != 0:
@@ -39,7 +70,15 @@ def main() -> int:
     # GitHub data improves the AI open-source section, but rendering should still
     # complete with fallback projects if the token is missing or the API fails.
     run_step([sys.executable, "github_ai_projects.py"], required=False)
-    return run_step([sys.executable, "render_market_pack_calm_20260708.py"], required=True)
+
+    render_status = run_step(
+        [sys.executable, "render_market_pack_calm_20260708.py"],
+        required=True,
+    )
+    if render_status != 0:
+        return render_status
+
+    return split_combined_image_if_configured()
 
 
 if __name__ == "__main__":
