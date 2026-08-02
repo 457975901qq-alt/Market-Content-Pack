@@ -4,6 +4,11 @@ __pycache__/
 *.pyc
 logs/
 outputs/
+runtime/
+state/
+reports/
+evals/cache/
+evals/checkpoints/
 tmp/
 .DS_Store
 

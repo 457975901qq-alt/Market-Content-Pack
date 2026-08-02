@@ -7,6 +7,8 @@ import argparse
 import datetime as dt
 import json
 import os
+import subprocess
+import shutil
 import sys
 import traceback
 import urllib.error
@@ -17,8 +19,8 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_OUTPUT_DIR = ROOT / "outputs" / "github_ai_projects"
-ERROR_LOG = ROOT / "logs" / "error.log"
+DEFAULT_OUTPUT_DIR = Path(os.environ.get("GITHUB_OUTPUT_DIR", str(ROOT / "outputs" / "github_ai_projects"))).expanduser().resolve()
+ERROR_LOG = Path(os.environ.get("GITHUB_ERROR_LOG", str(ROOT / "logs" / "error.log"))).expanduser().resolve()
 KEYWORDS = ["AI Agent", "LLM", "MCP", "RAG", "workflow automation"]
 PER_KEYWORD = 5
 FINAL_LIMIT = 3
@@ -56,6 +58,18 @@ def github_request(keyword: str, token: str) -> dict[str, Any]:
     )
     with urllib.request.urlopen(req, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def github_cli_request(keyword: str) -> dict[str, Any]:
+    """Use the authenticated gh CLI when GITHUB_TOKEN is not exported."""
+    query = f"{keyword} in:name,description,topics archived:false"
+    completed = subprocess.run(
+        ["gh", "api", "search/repositories", "-X", "GET", "-f", f"q={query}", "-f", "sort=stars", "-f", "order=desc", "-f", f"per_page={PER_KEYWORD}"],
+        cwd=ROOT, text=True, capture_output=True, timeout=45, check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr[-500:])
+    return json.loads(completed.stdout)
 
 
 def normalize_repo(item: dict[str, Any], keyword: str) -> dict[str, Any] | None:
@@ -100,12 +114,12 @@ def repo_score(repo: dict[str, Any]) -> float:
     )
 
 
-def fetch_repositories(token: str) -> list[dict[str, Any]]:
+def fetch_repositories(token: str = "") -> list[dict[str, Any]]:
     repos: dict[str, dict[str, Any]] = {}
     for keyword in KEYWORDS:
         try:
-            data = github_request(keyword, token)
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+            data = github_request(keyword, token) if token else github_cli_request(keyword)
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, ValueError, RuntimeError) as exc:
             log_error(f"GitHub search failed for keyword={keyword!r}", exc)
             continue
 
@@ -130,7 +144,7 @@ def write_outputs(repos: list[dict[str, Any]], output_dir: Path) -> tuple[Path, 
     selected = repos[:FINAL_LIMIT]
     payload = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "source": "GitHub REST API search repositories",
+        "source": "GitHub REST API search repositories" if os.environ.get("GITHUB_TOKEN", "").strip() else "GitHub CLI gh api search/repositories",
         "keywords": KEYWORDS,
         "per_keyword": PER_KEYWORD,
         "selected_count": len(selected),
@@ -144,7 +158,7 @@ def write_outputs(repos: list[dict[str, Any]], output_dir: Path) -> tuple[Path, 
     lines = [
         "# AI开源项目",
         "",
-        f"- 数据源：GitHub REST API search repositories",
+        f"- 数据源：{payload['source']}",
         f"- 生成时间：{payload['generated_at']}",
         f"- 关键词：{', '.join(KEYWORDS)}",
         "",
@@ -175,8 +189,8 @@ def main() -> int:
     args = parser.parse_args()
 
     token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if not token:
-        msg = "GITHUB_TOKEN is not set; cannot call GitHub REST API with authentication."
+    if not token and shutil.which("gh") is None:
+        msg = "GITHUB_TOKEN is not set and gh CLI is unavailable; GitHub source is blocked."
         log_error(msg)
         print(msg, file=sys.stderr)
         return 2

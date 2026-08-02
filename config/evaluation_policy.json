@@ -1,0 +1,20 @@
+{
+  "dataset_version": "market_content_v1",
+  "hard_metrics": {
+    "schema_completeness": 1.0,
+    "source_grounding": 1.0,
+    "ticker_validity": 1.0,
+    "temporal_consistency": 1.0,
+    "forbidden_claim_check": 1.0
+  },
+  "soft_metrics": {
+    "factual_faithfulness": 0.9,
+    "content_usability": 0.75
+  },
+  "primary_judge": "ollama",
+  "review_judge": "gemini",
+  "batch_size": 10,
+  "gemini_max_requests_per_run": 10,
+  "allow_production_update": false,
+  "allow_delivery": false
+}

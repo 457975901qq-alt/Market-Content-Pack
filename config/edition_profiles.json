@@ -1,0 +1,35 @@
+{
+  "timezone": "Asia/Tokyo",
+  "editions": {
+    "morning_close_review": {
+      "label": "早盘",
+      "session_name": "morning",
+      "market_session": "close_review",
+      "scheduled_local_time": "06:30",
+      "prompt_version": "morning_close_review_v2",
+      "prompt_file": "config/prompts/morning_close_review_v2.txt",
+      "data_window_policy": "previous_trading_session_close_to_morning_cutoff",
+      "focus": "上一交易时段收盘复盘与亚洲开盘前风险",
+      "version_fields": [
+        "previous_session_summary",
+        "asia_open_risk",
+        "close_review_focus"
+      ]
+    },
+    "evening_premarket_watch": {
+      "label": "晚盘",
+      "session_name": "evening",
+      "market_session": "premarket_watch",
+      "scheduled_local_time": "17:30",
+      "prompt_version": "evening_premarket_watch_v2",
+      "prompt_file": "config/prompts/evening_premarket_watch_v2.txt",
+      "data_window_policy": "morning_cutoff_to_evening_cutoff",
+      "focus": "美股盘前催化剂、预期变化与风险",
+      "version_fields": [
+        "premarket_catalysts",
+        "expectation_changes",
+        "premarket_risks"
+      ]
+    }
+  }
+}

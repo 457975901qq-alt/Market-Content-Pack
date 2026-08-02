@@ -1,0 +1,24 @@
+{
+  "enabled": true,
+  "canary_env": "SELF_HEALING_CANARY_MODE",
+  "fault_env": "SELF_HEALING_FAULT",
+  "max_same_category_attempts": 2,
+  "max_total_repairs": 4,
+  "network_backoff_seconds": [2, 5, 10],
+  "gemini_max_retries": 2,
+  "ollama_restart_max_attempts": 1,
+  "allowed_faults": [
+    "none",
+    "ollama_unavailable",
+    "collector_timeout",
+    "collector_http_503",
+    "market_data_incomplete",
+    "gemini_invalid_json"
+  ],
+  "repair_actions": {
+    "ollama_unavailable": ["healthcheck_ollama", "restart_ollama_once", "healthcheck_ollama", "select_gemini_fallback"],
+    "temporary_network_failure": ["retry_failed_collector", "select_backup_source"],
+    "market_data_incomplete": ["collect_missing_market_quotes", "validate_market_data", "resume_market_pipeline"],
+    "gemini_json_parse_failure": ["repair_json_deterministically", "retry_gemini_bounded", "use_rule_template"]
+  }
+}

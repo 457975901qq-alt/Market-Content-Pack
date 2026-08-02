@@ -5,11 +5,10 @@
 ## 当前输出规范
 
 - 默认只输出市场内容 JSON、市场分析和平台文案。
-- 默认关闭图片生成与图片 QA，配置为 `TEXT_ONLY=true`。
+- 当前仅输出文字、结构化市场数据和平台文案；图片生成与图片 QA 程序已移除。
 - 数据缺失时显示“待核验”或“暂无可靠数据”，不得编造数值。
-- 正式发送默认关闭，配置为 `DRY_RUN=true`、`DELIVER_ENABLED=false`。
-
-如需临时启用图片流程，必须显式将 `TEXT_ONLY=false`，并单独通过图片质量门禁。
+- 外部发布程序已移除，结果只写入本地运行目录。
+- 内容包包含 `ai_investment_view`：只输出基于已验证来源的非个性化情景分析、观察框架、证据、风险和失效条件；数据不足时输出“数据不足”，不生成买入、卖出或目标价指令。
 
 ## OpenAI 市场内容 JSON
 
@@ -39,16 +38,14 @@ uv run python main.py --edition evening_premarket_watch --provider gemini
 # Ollama → Gemini → 无数字规则模板
 uv run python main.py --edition evening_premarket_watch --provider auto
 
-# 只输出文字，不生成图片
-uv run python main.py --edition evening_premarket_watch --text-only
 ```
 
 `rule_template` 只会生成“数据暂缺”状态，不会生成价格、涨跌幅或股票事实。
 Provider 错误会回到现有错误日志和状态机，不会绕过内容 JSON 校验。
 
-运行时默认启用受控 Tool Router：按 Ollama、Gemini、规则模板的健康状态选择内容 Provider，并记录候选工具、拒绝原因和 fallback chain。显式传入 `--provider ollama|gemini|openai|rule_template` 时仍可固定 Provider；计划不会调用未注册工具，也不会把 deliver 放入模型 Function Calling。
+运行时默认启用受控 Tool Router：按 Ollama、Gemini、规则模板的健康状态选择内容 Provider，并记录候选工具、拒绝原因和 fallback chain。显式传入 `--provider ollama|gemini|openai|rule_template` 时仍可固定 Provider。
 
-主流程的业务调用统一经过 `Planner → FunctionCall → FunctionExecutor`：市场行情、新闻、正文抽取、内容生成、市场/内容验证和 `final_quality_gate` 都绑定到固定 Python 业务函数。Executor 依据 `config/function_calling_policy.json` 校验参数、步骤权限和调用次数；失败结果交给受控 RepairController，修复成功只重试当前 FunctionCall 一次，并将调用事件写入运行日志。`deliver` 和 `canary_deliver` 永远被阻止。
+主流程的业务调用统一经过 `Planner → FunctionCall → FunctionExecutor`：市场行情、新闻、正文抽取、内容生成、市场/内容验证和 `final_quality_gate` 都绑定到固定 Python 业务函数。Executor 依据 `config/function_calling_policy.json` 校验参数、步骤权限和调用次数；失败结果交给受控 RepairController，修复成功只重试当前 FunctionCall 一次，并将调用事件写入运行日志。外部发布不在运行时注册表中。
 
 规划文件写入 `runtime/plans/<run_id>.json`，决策文件写入 `runtime/decisions/<run_id>.json`，决策审计写入 `logs/market_content_decisions.log`。Shadow run 使用自己的 `runtime/shadow/<run_id>/plans`、`decisions` 和日志目录。resume 会读取既有计划，已成功且 artifact 有效的步骤仍由状态机跳过，只重新规划未完成步骤。
 
@@ -107,7 +104,7 @@ uv run python main.py --edition morning_close_review --enforce-schedule
 校验规则：
 
 - API 返回后先解析 JSON；解析失败会停止流程。
-- `date`、`timezone`、`summary`、`key_points`、`image_text.title`、`image_text.sections` 不能为空。
+- `date`、`timezone`、`summary`、`key_points`、`analysis_text.title`、`analysis_text.sections` 不能为空。
 - `date` 必须等于当前 `Asia/Tokyo` 日期。
 - `timezone` 必须是 `Asia/Tokyo`。
 - API 无返回、空字符串、JSON 解析失败、关键字段缺失、日期不一致时，不生成内容，不发送到任何平台。
@@ -157,9 +154,17 @@ market_sources/source_status.json
 `RSS_FEEDS` 以逗号分隔配置 RSS / Atom 地址；未设置时会使用默认市场源：
 Yahoo Finance、MarketWatch、Federal Reserve、NVIDIA Blog、OpenAI News、CNBC Tech、
 The Verge AI。`RSS_ITEMS_PER_FEED` 控制每个源最多读取的条数，默认 8。
+来源并行度和跨运行缓存策略集中写在 `config/source_policy.json`：默认并行读取 RSS，
+所有素材会按当前 edition 的 `data_cutoff` 过滤；未来时间的素材会被丢弃并计入
+`future_items_discarded`。GitHub 共享缓存默认关闭，避免上一轮运行的项目混入当前 run；
+只有显式设置 `GITHUB_SHARED_CACHE_ENABLED=true` 且缓存未过期时才允许复用。
 X、Exa、Jina 未接入时会明确记录
 `unavailable` 及原因，不会把缺失来源当作成功采集。Shadow 运行的素材文件位于
 `outputs/shadow/<run_id>/market_sources/`。
+
+项目本身不安装 cron 或 launchd 调度器。当前定时任务由 Codex automation 负责调用上述
+两个统一入口；如迁移到其他机器，应只保留一个调度来源，避免 Codex automation、cron、
+launchd 和 Docker 同时触发同一版本。
 
 ## 运行完整流程
 
@@ -172,16 +177,15 @@ uv run python main.py --edition evening_premarket_watch
 ```bash
 uv run python main.py --edition evening_premarket_watch --shadow-run --raw-response-file tests/fixtures/market_content_valid_20260719.json
 uv run python main.py --edition evening_premarket_watch --resume <run_id>
-uv run python main.py --edition evening_premarket_watch --resume <run_id> --from-step render_images
+uv run python main.py --edition evening_premarket_watch --resume <run_id> --from-step final_validation
 ```
 
 ## 已恢复的安全功能层
 
 - `source_router.py` 通过 Agent Reach 的 X、Exa、Jina、RSS 和 GitHub 路由生成统一素材；每个路由的成功、部分可用或不可用状态都会写入 `market_sources/source_status.json`。
-- `function_calling/` 提供白名单业务函数、Pydantic 参数校验、调用次数限制和统一结果；`deliver` 与 `canary_deliver` 永远不在可调用注册表中。
+- `function_calling/` 提供白名单业务函数、Pydantic 参数校验、调用次数限制和统一结果；外部发布不在可调用注册表中。
 - `reviewer_agent.py` 在文本 QA 和最终质量门禁通过后只读复核内容和来源，写入 `runtime/reviews/<run_id>/review_result.json`。Reviewer 不能改写原始 artifact，也不能批准发送。
 - `evals/` 是离线确定性评测入口，只读取 fixture/历史样本，报告中的 `delivered` 固定为 `false`。
-- `douyin_adapter.py` 目前只执行 `sau douyin check --account <DOUYIN_ACCOUNT>` 健康检查，并提供发布前 readiness 报告；发布接口保持 fail-closed，未配置账号或 reviewer 未批准时不会伪造 healthy。
 
 ## Phoenix / OpenTelemetry
 
@@ -195,24 +199,7 @@ PHOENIX_COLLECTOR_ENDPOINT=http://127.0.0.1:4317 \
 uv run python main.py --edition morning_close_review --shadow-run --raw-response-file tests/fixtures/market_content_morning_valid_20260719.json
 ```
 
-本地运行日志中的 `trace.jsonl` 是 Phoenix 不可用时的审计后备；Phoenix 不可用不会阻断内容流程。正式发布仍由现有质量门禁、审批和 Kill Switch 控制，当前默认 `DRY_RUN=true`、`DELIVER_ENABLED=false`。
-
-## 抖音发布前检查
-
-抖音默认走 `sau` CLI，`.env` 中的 `DOUYIN_ACCOUNT=creator` 是本地 cookie 标签，不是账号密码。
-
-```bash
-# 首次或 cookie 失效时扫码登录
-sau douyin login --account creator
-
-# 校验 cookie
-sau douyin check --account creator
-
-# 检查某次运行是否达到可发布状态
-python douyin_adapter.py --readiness outputs/canary/<run_id>
-```
-
-readiness 报告会检查账号 cookie、文字文案、reviewer 决策、`DRY_RUN` 和 `DELIVER_ENABLED`。当前项目默认不发布任何内容；如未来启用渠道，仍必须先通过质量门禁和人工审批。
+本地运行日志中的 `trace.jsonl` 是 Phoenix 不可用时的审计后备；Phoenix 不可用不会阻断内容流程。当前仅保存本地文字结果，不包含外部发布适配器。
 
 ## Obsidian 本地连接
 
@@ -247,7 +234,7 @@ docker compose up -d phoenix
 
 容器不安装 Ollama；app 通过 `host.docker.internal:11434` 访问宿主机。若宿主机 Ollama 只监听 `127.0.0.1`，Docker 内连接会失败，需要人工将 Ollama 配置为可被 Docker Desktop 网关访问，不能在项目里伪造健康状态。
 
-Shadow 运行写入 `outputs/shadow/<run_id>/`，日志写入 `logs/shadow/<run_id>/`，状态、审核包和影子报告写入 `runtime/shadow/<run_id>/`。旧的 `outputs/canary/<run_id>/` 运行仍可恢复。所有运行强制 `DRY_RUN=true`、`DELIVER_ENABLED=false`，不会正式发送。
+Shadow 运行写入 `outputs/shadow/<run_id>/`，日志写入 `logs/shadow/<run_id>/`，状态和审核包写入 `runtime/shadow/<run_id>/`。旧的 Canary 运行记录仅作为历史审计保留，不会触发发布。
 
 每个步骤的状态、错误和 artifact hash 写入状态文件和 `outputs/.../logs/steps.jsonl`。恢复时会校验文件存在性、非空、运行 ID 和 SHA-256；损坏的产物会从对应步骤及下游重新执行。
 
@@ -277,7 +264,7 @@ uv run python main.py \
   --raw-response-file tests/fixtures/market_content_valid_20260719.json
 ```
 
-该命令会执行内容、文字 QA 和审核入口，但不会调用正式发送接口；正式 `delivered` 状态保持为 `false`。
+该命令会执行内容、文字 QA 和审核入口，只写入本地分析产物，不包含外部发布动作。
 
 执行顺序：
 

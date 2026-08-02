@@ -1,10 +1,11 @@
 import json
+import os
 import time
 import tomllib
 from pathlib import Path
 
 
-path = Path("/Users/ara/.codex/automations/automation/automation.toml")
+path = Path(os.environ.get("CODEX_AUTOMATION_FILE", "/Users/ara/.codex/automations/automation/automation.toml")).expanduser()
 data = tomllib.loads(path.read_text())
 
 data["kind"] = "cron"
@@ -12,7 +13,8 @@ data["status"] = "ACTIVE"
 data["model"] = data.get("model", "gpt-5")
 data["reasoning_effort"] = data.get("reasoning_effort", "high")
 data["execution_environment"] = data.get("execution_environment", "local")
-data["cwds"] = data.get("cwds", ["/Users/ara/Documents/新闻搜索"])
+project_root = str(Path(__file__).resolve().parent)
+data["cwds"] = [project_root]
 data["updated_at"] = int(time.time() * 1000)
 
 order = [

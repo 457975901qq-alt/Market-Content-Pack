@@ -1,0 +1,34 @@
+{
+  "date": "2026-07-19",
+  "timezone": "Asia/Tokyo",
+  "edition": "evening_premarket_watch",
+  "prompt_version": "evening_premarket_watch_v2",
+  "data_cutoff": "2026-07-19T17:30:00+09:00",
+  "scheduled_local_time": "17:30",
+  "source_window_start": "2026-07-19T06:30:00+09:00",
+  "source_window_end": "2026-07-19T17:30:00+09:00",
+  "market_session": "premarket_watch",
+  "edition_fields": {
+    "premarket_catalysts": "预览数据，仅验证字段路由。",
+    "expectation_changes": "预览数据，仅验证字段路由。",
+    "premarket_risks": "预览数据，仅验证字段路由。"
+  },
+  "summary": "仅用于验证内容与图片流水线，不代表真实市场结论。",
+  "key_points": ["预览数据仅用于流水线验证"],
+  "major_indexes": [],
+  "important_stocks": [],
+  "macro_events": [],
+  "earnings": [],
+  "risk_factors": ["测试数据不得进入正式发送"],
+  "analysis_text": {
+    "title": "预览市场内容",
+    "subtitle": "仅验证版式和质量门禁",
+    "sections": [{"heading": "数据状态", "content": "预览数据，仅验证版式。"}]
+  },
+  "douyin": {
+    "title": "每日市场内容包预览",
+    "cover_title": "仅验证版式",
+    "caption": "预览数据，不用于发布。",
+    "hashtags": ["#预览"]
+  }
+}

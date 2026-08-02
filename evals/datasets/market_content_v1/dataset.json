@@ -1,0 +1,1477 @@
+{
+  "dataset_version": "market_content_v1",
+  "created_at": "2026-07-20T00:01:27.036985+00:00",
+  "case_count": 30,
+  "cases": [
+    {
+      "case_id": "market_content_v1_01",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_01"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_01"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_01，主题为市场观察，数据源 source_01。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_01"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_02",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_02"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_02"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_02，主题为市场观察，数据源 source_02。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_02"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_03",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_03"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_03"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_03，主题为市场观察，数据源 source_03。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_03"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_04",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_04"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_04"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_04，主题为市场观察，数据源 source_04。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_04"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_05",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_05"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_05"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_05，主题为市场观察，数据源 source_05。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_05"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_06",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_06"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_06"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_06，主题为市场观察，数据源 source_06。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_06"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_07",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_07"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_07"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_07，主题为市场观察，数据源 source_07。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_07"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_08",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_08"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_08"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_08，主题为市场观察，数据源 source_08。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_08"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_09",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_09"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_09"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_09，主题为市场观察，数据源 source_09。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_09"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_10",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_10"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_10"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_10，主题为市场观察，数据源 source_10。",
+        "delivery_allowed": true
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_10"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "pass"
+      },
+      "metadata": {
+        "category": "success",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": false
+      }
+    },
+    {
+      "case_id": "market_content_v1_11",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_11"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_11"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_11。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_11"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "ollama_output_anomaly",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_12",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_12"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_12"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_12。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_12"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "ollama_output_anomaly",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_13",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_13"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_13"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_13。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_13"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "ollama_output_anomaly",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_14",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_14"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_14"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_14。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_14"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "ollama_output_anomaly",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_15",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_15"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_15"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_15。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_15"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "ollama_output_anomaly",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_16",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_16"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_16"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_16。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_16"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "gemini_fallback",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_17",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_17"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_17"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_17。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_17"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "gemini_fallback",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_18",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_18"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_18"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_18。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_18"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "gemini_fallback",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_19",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_19"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_19"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_19。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_19"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "gemini_fallback",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_20",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_20"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_20"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_20。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_20"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "gemini_fallback",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_21",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_21"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_21"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_21。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_21"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "market_data_missing",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_22",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_22"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_22"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_22。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_22"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "market_data_missing",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_23",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_23"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_23"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_23。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_23"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "market_data_missing",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_24",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_24"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_24"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_24。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_24"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "market_data_missing",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_25",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_25"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_25"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_25。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_25"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "market_data_missing",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_26",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_26"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_26"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_26。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_26"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "image_qa_renderer_failure",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_27",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_27"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_27"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_27。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_27"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "image_qa_renderer_failure",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_28",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_28"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_28"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_28。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_28"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "image_qa_renderer_failure",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_29",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_29"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_29"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_29。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_29"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "image_qa_renderer_failure",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    },
+    {
+      "case_id": "market_content_v1_30",
+      "edition": "evening_premarket_watch",
+      "input": {
+        "report_date": "2026-07-19",
+        "data_cutoff_date": "2026-07-19",
+        "data_timestamps": [
+          "2026-07-19"
+        ],
+        "source_ids": [
+          "source_30"
+        ],
+        "source_urls": [
+          "https://example.invalid/source_30"
+        ],
+        "tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "text": "预览案例 market_content_v1_30。",
+        "delivery_allowed": false
+      },
+      "reference": {
+        "required_facts": [],
+        "required_sources": [
+          "source_30"
+        ],
+        "expected_theme": "market_observation",
+        "allowed_tickers": [
+          "SPX",
+          "NDX",
+          "DJI"
+        ],
+        "forbidden_claims": [
+          "保证盈利",
+          "确定上涨"
+        ],
+        "expected_result": "fail"
+      },
+      "metadata": {
+        "category": "image_qa_renderer_failure",
+        "fixture": true,
+        "source_kind": "fixture",
+        "source_run_id": null,
+        "artifact_root": null,
+        "expected_failure": true
+      }
+    }
+  ]
+}

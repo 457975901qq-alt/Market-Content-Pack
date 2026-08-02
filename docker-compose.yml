@@ -1,0 +1,29 @@
+name: daily-market-content-pack
+
+services:
+  app:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      DRY_RUN: "true"
+      PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:4317
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ./logs:/app/logs
+      - ./outputs:/app/outputs
+      - ./runtime:/app/runtime
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    volumes:
+      - phoenix_data:/root/.phoenix
+
+volumes:
+  phoenix_data:

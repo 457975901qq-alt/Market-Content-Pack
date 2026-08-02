@@ -1,0 +1,35 @@
+{
+  "planner_version": "controlled-planner-v1",
+  "max_steps": 20,
+  "max_tool_calls": 30,
+  "max_runtime_seconds": 1200,
+  "routes": {
+    "content_model": ["ollama", "gemini", "rule_template"],
+    "market_primary": ["primary_market_source"],
+    "market_secondary": ["secondary_market_source"],
+    "news_discovery": ["rss", "exa", "x", "github"],
+    "web_extraction": ["jina", "rss_summary", "raw_webpage"]
+  },
+  "tools": {
+    "openai": {"enabled": true, "priority": 95, "supported_tasks": ["content_model"], "quality_level": "high"},
+    "ollama": {"enabled": true, "priority": 100, "supported_tasks": ["content_model"], "quality_level": "high"},
+    "gemini": {"enabled": true, "priority": 80, "supported_tasks": ["content_model"], "quality_level": "high"},
+    "rule_template": {"enabled": true, "priority": 10, "supported_tasks": ["content_model"], "quality_level": "degraded"},
+    "primary_market_source": {"enabled": true, "priority": 100, "supported_tasks": ["market_primary"], "quality_level": "high"},
+    "secondary_market_source": {"enabled": true, "priority": 90, "supported_tasks": ["market_secondary"], "quality_level": "high"},
+    "rss": {"enabled": true, "priority": 90, "supported_tasks": ["news_discovery"], "quality_level": "normal"},
+    "exa": {"enabled": true, "priority": 80, "supported_tasks": ["news_discovery"], "quality_level": "high"},
+    "x": {"enabled": true, "priority": 70, "supported_tasks": ["news_discovery"], "quality_level": "realtime"},
+    "github": {"enabled": true, "priority": 60, "supported_tasks": ["news_discovery"], "quality_level": "normal"},
+    "jina": {"enabled": true, "priority": 100, "supported_tasks": ["web_extraction"], "quality_level": "high"},
+    "rss_summary": {"enabled": true, "priority": 80, "supported_tasks": ["web_extraction"], "quality_level": "normal"},
+    "raw_webpage": {"enabled": true, "priority": 50, "supported_tasks": ["web_extraction"], "quality_level": "degraded"},
+    "deterministic_executor": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
+    "deterministic_validator": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
+    "final_quality_gate": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
+    "deterministic_review_package": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
+    "reviewer_agent": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
+    "reviewer_gate": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
+    "blocked_delivery_gate": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "blocked"}
+  }
+}

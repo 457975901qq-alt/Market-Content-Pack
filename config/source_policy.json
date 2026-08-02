@@ -1,0 +1,6 @@
+{
+  "max_workers": 4,
+  "github_shared_cache_enabled": false,
+  "github_cache_max_age_hours": 6,
+  "drop_future_material": true
+}

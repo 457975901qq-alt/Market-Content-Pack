@@ -1,0 +1,9 @@
+{
+  "primary_provider": "yahoo_chart",
+  "secondary_provider": "google_finance",
+  "require_crosscheck": true,
+  "conflict_threshold": 0.02,
+  "max_staleness_hours": 120,
+  "required_symbols": ["SPX", "NDX", "DJI"],
+  "max_workers": 4
+}

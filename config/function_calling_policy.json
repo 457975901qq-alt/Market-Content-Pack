@@ -1,0 +1,17 @@
+{
+  "max_calls_per_run": 30,
+  "max_calls_per_step": 5,
+  "allow_parallel_calls": false,
+  "reject_unknown_tools": true,
+  "reject_extra_arguments": true,
+  "allowed_steps": [
+    "collect_market_data",
+    "collect_news",
+    "extract_web_content",
+    "generate_content",
+    "validate_market_data",
+    "validate_content_consistency",
+    "final_quality_gate"
+  ],
+  "blocked_tools": []
+}
