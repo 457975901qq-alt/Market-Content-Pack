@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - feat/unified-market-image-pack
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DRY_RUN: "true"
+      DELIVER_ENABLED: "false"
+      TEXT_ONLY: "true"
+      AUTO_OPTIMIZATION_ENABLED: "true"
+      SELF_HEALING_ENABLED: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Compile project sources
+        run: |
+          uv run python -m compileall -q \
+            -x '(^|/)(\.venv|runtime|logs|outputs)(/|$)' \
+            .
+
+      - name: Run tests
+        run: uv run pytest -q
