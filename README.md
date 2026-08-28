@@ -1,13 +1,13 @@
 # 每日市场内容包
 
-本项目生成中文每日市场内容包：文字内容和市场分析由结构化 JSON 统一管理，平台配文作为独立文本输出。
+本项目生成中文每日市场内容包：文字内容和市场分析由结构化 JSON 统一管理。
 
 ## 当前输出规范
 
-- 默认只输出市场内容 JSON、市场分析和平台文案。
-- 当前仅输出文字、结构化市场数据和平台文案；图片生成与图片 QA 程序已移除。
+- 默认只输出市场内容 JSON、市场分析和最终文字报告。
+- 默认只输出文字和结构化市场数据；平台文案、图片生成和外部发布均已关闭。
 - 数据缺失时显示“待核验”或“暂无可靠数据”，不得编造数值。
-- 外部发布程序已移除，结果只写入本地运行目录。
+- X/Twitter 文本发布适配器已注册并选定为当前 delivery adapter，但默认保持关闭；`DELIVER_ENABLED=false`、全局 Kill Switch 和审批门禁仍会阻断外部发布。结果只写入本地运行目录；图片链路目前也只做本地渲染和 QA。
 - 内容包包含 `ai_investment_view`：只输出基于已验证来源的非个性化情景分析、观察框架、证据、风险和失效条件；数据不足时输出“数据不足”，不生成买入、卖出或目标价指令。
 
 ## OpenAI 市场内容 JSON
@@ -43,9 +43,34 @@ uv run python main.py --edition evening_premarket_watch --provider auto
 `rule_template` 只会生成“数据暂缺”状态，不会生成价格、涨跌幅或股票事实。
 Provider 错误会回到现有错误日志和状态机，不会绕过内容 JSON 校验。
 
+### X/Twitter 发布适配器
+
+当前适配器选择为 `x_twitter`，仅支持文字调用，接口为 X API `POST /2/tweets`；不支持图片上传，也不会复用 X 数据采集凭据。写权限使用 OAuth 1.0a User Context，需要四项独立凭据：Consumer Key、Consumer Secret、Access Token、Access Token Secret，分别存放在 macOS Keychain 的 `x_consumer_key`、`x_consumer_secret`、`x_publish_access_token`、`x_publish_access_token_secret` 项中。缺少任意一项时适配器健康状态为 `unconfigured`。
+
+当前安全状态固定为：
+
+```text
+delivery_policy.adapter=x_twitter
+delivery_policy.enabled=false
+delivery_policy.external_delivery_enabled=false
+delivery_policy.global_delivery_kill_switch=true
+```
+
+因此本地测试只验证适配器选择和健康检查，不会创建、发送或重试 X 帖子。要进入正式发布准备阶段，还必须经过独立凭据配置、目标账号授权、生产 Canary、人工审批和显式发布门禁。
+
+在本机配置 OAuth 1.0a 凭据时使用隐藏输入，不要把凭据写入 `.env`：
+
+```bash
+uv run python scripts/configure_x_twitter_oauth.py
+```
+
 运行时默认启用受控 Tool Router：按 Ollama、Gemini、规则模板的健康状态选择内容 Provider，并记录候选工具、拒绝原因和 fallback chain。显式传入 `--provider ollama|gemini|openai|rule_template` 时仍可固定 Provider。
 
 主流程的业务调用统一经过 `Planner → FunctionCall → FunctionExecutor`：市场行情、新闻、正文抽取、内容生成、市场/内容验证和 `final_quality_gate` 都绑定到固定 Python 业务函数。Executor 依据 `config/function_calling_policy.json` 校验参数、步骤权限和调用次数；失败结果交给受控 RepairController，修复成功只重试当前 FunctionCall 一次，并将调用事件写入运行日志。外部发布不在运行时注册表中。
+
+当前执行层还启用了受控 Agent Loop（`config/agent_policy.json`）：每轮先观察状态、依赖、已完成 artifact 和预算，再选择下一个已注册步骤；它可以跳过已完成步骤、在受控范围内重排和记录重规划，但不能调用 `deliver`/`canary_deliver`、Shell、未注册工具或绕过 `final_quality_gate`/`reviewer_gate`。每次决策写入运行目录的 `logs/agent_loop.jsonl`，预算、停滞和依赖异常均 fail-closed。该层是可审计的 Agent 控制器，不会把任意模型输出变成代码执行权限。
+
+Agent V1 的通用运行时位于 `agent/` 与 `runtime/`：`AgentState`、`AgentAction`、`AgentPlanner`、`DailyMarketAgent`、`FinishPolicy` 和 `RecoveryPolicy` 通过现有 Function Calling Executor 执行动作。每次动作都会保存 state hash checkpoint，并可通过现有 SQLite audit 记录恢复；缺行情、来源冲突、Provider/JSON 失败和 Reviewer reject 可触发受控 re-plan。`runtime/executor.py` 不创建第二套 Registry，只适配现有注册函数或测试注入的固定 adapter。
 
 规划文件写入 `runtime/plans/<run_id>.json`，决策文件写入 `runtime/decisions/<run_id>.json`，决策审计写入 `logs/market_content_decisions.log`。Shadow run 使用自己的 `runtime/shadow/<run_id>/plans`、`decisions` 和日志目录。resume 会读取既有计划，已成功且 artifact 有效的步骤仍由状态机跳过，只重新规划未完成步骤。
 
@@ -55,7 +80,7 @@ market_quotes.py 是独立的结构化行情采集步骤，位于素材采集之
 
 collect_sources -> collect_market_quotes -> generate_content -> final_validation
 
-行情默认使用 Yahoo Finance Chart 作为主源、Google Finance 作为第二来源。SPX、NDX、DJI 是必需指数；默认要求第二来源交叉核对。来源缺失、价格冲突、未来时间戳或超过新鲜度窗口时，行情 artifact 为 status=failed，流程不会继续生成内容或发送。
+行情默认使用 Yahoo Finance Chart 作为主源、Google Finance 作为第二来源。生产核心资产为 VOO（标普500 ETF 代理）和 QQQM（纳斯达克100 ETF 代理）；它们不是指数值。默认要求第二来源交叉核对。来源缺失、价格冲突、未来时间戳或超过新鲜度窗口时，行情 artifact 为 status=failed，流程不会继续生成内容或发送。
 
 策略文件为 config/market_data_policy.json。可通过环境变量调整：
 
@@ -65,7 +90,7 @@ MARKET_SOURCE_CONFLICT_THRESHOLD=0.02
 MARKET_MAX_STALENESS_HOURS=120
 MARKET_STOCK_SYMBOLS=NVDA,MSFT,AAPL
 
-结构化 artifact 会写入运行目录的 market_sources/market_quotes.json，并带有 market_data_version、每个报价的 data_timestamp、来源 URL、交叉核对结果和 freshness 结果。内容 JSON 通过 market_data_version 与 market_data_hash 记录使用的行情版本；最终内容校验会验证必需指数已经传入内容包。
+结构化 artifact 会写入运行目录的 market_sources/market_quotes.json，并带有 market_data_version、每个报价的 data_timestamp、来源 URL、交叉核对结果和 freshness 结果。内容 JSON 通过 market_data_version 与 market_data_hash 记录使用的行情版本；最终内容校验会验证 VOO/QQQM 两个必需核心资产已经传入内容包。
 
 ### 早晚版路由
 
@@ -95,7 +120,6 @@ uv run python main.py --edition morning_close_review --enforce-schedule
 输出文件：
 
 - `outputs/runs/<run_id>/market_content/market_content.json`
-- `outputs/runs/<run_id>/market_content/douyin.md`
 
 错误日志：
 
@@ -199,7 +223,7 @@ PHOENIX_COLLECTOR_ENDPOINT=http://127.0.0.1:4317 \
 uv run python main.py --edition morning_close_review --shadow-run --raw-response-file tests/fixtures/market_content_morning_valid_20260719.json
 ```
 
-本地运行日志中的 `trace.jsonl` 是 Phoenix 不可用时的审计后备；Phoenix 不可用不会阻断内容流程。当前仅保存本地文字结果，不包含外部发布适配器。
+本地运行日志中的 `trace.jsonl` 是 Phoenix 不可用时的审计后备；Phoenix 不可用不会阻断内容流程。当前运行策略明确禁止 `--enable-images`，图片渲染模块仅保留用于离线回归测试。
 
 ## Obsidian 本地连接
 
@@ -259,12 +283,70 @@ fixture 报告中的 `fixture_ready=true` 只表示受控策略验收通过；�
 uv run python main.py \
   --edition evening_premarket_watch \
   --provider rule_template \
+  --dry-run \
   --shadow-run \
   --run-id market_YYYYMMDD_HHMM \
   --raw-response-file tests/fixtures/market_content_valid_20260719.json
 ```
 
 该命令会执行内容、文字 QA 和审核入口，只写入本地分析产物，不包含外部发布动作。
+
+Agent V1 可选启用模型辅助规划：
+
+```bash
+AGENT_PLANNER_MODE=hybrid AGENT_PLANNER_PROVIDER=ollama \
+uv run python main.py --edition evening_premarket_watch --shadow-run --run-mode shadow_canary
+```
+
+模型只允许建议已注册 Function，工具参数仍由 Executor 校验；模型输出异常、未知工具或越过门禁时自动回到规则 Planner。只读查看稳定性窗口：
+
+```bash
+uv run python scripts/canary_status.py
+uv run python scripts/canary_status.py --json
+```
+
+如果需要同时验收图片链路：
+
+```bash
+uv run python main.py \
+  --edition evening_premarket_watch \
+  --provider rule_template \
+  --enable-images \
+  --shadow-run \
+  --run-id market_YYYYMMDD_HHMM
+```
+
+生产放行前运行预检：
+
+```bash
+uv run python -m production_preflight --run-id <shadow_run_id>
+```
+
+预检是 fail-closed 的。只有发送策略、生产更新开关、图片生成与 QA、发布适配器、真实环境 Canary，以及指定 Shadow 运行全部满足条件时才返回 `ready=true`；当前文本模式会明确报告图片链路和发布适配器缺失，不会误判为生产可用。
+
+发送授权还要求：非 dry-run、邮件适配器健康、运行 ID 与 artifact hash 匹配、人工批准人和未过期批准记录。`delivery_gate.py` 默认不发送；必须由明确配置的发布流程显式调用适配器。
+
+当前邮件渠道使用 SMTP。凭证只通过环境变量提供，不写入仓库：
+
+```bash
+export DELIVERY_SMTP_HOST="smtp.example.com"
+export DELIVERY_SMTP_PORT="587"
+export DELIVERY_SMTP_USERNAME="sender@example.com"
+export DELIVERY_SMTP_PASSWORD="<secret>"
+export DELIVERY_EMAIL_FROM="sender@example.com"
+export DELIVERY_EMAIL_TO="receiver@example.com"
+```
+
+完成真实批准后，使用独立发送入口：
+
+```bash
+uv run python -m deliver_run \
+  --run-id <production_run_id> \
+  --approval-file <approval.json> \
+  --confirm-production-send
+```
+
+该入口拒绝 Shadow/Canary 运行，并要求图片 QA、策略、SMTP 健康、批准记录和 artifact hash 全部匹配。
 
 执行顺序：
 
@@ -293,3 +375,17 @@ python3 healthcheck.py
 ## outputs 目录
 
 `outputs/` 保存生成的 JSON 和 Markdown 产物，只作为本地运行结果使用，不提交到 Git。需要重新生成时运行对应脚本即可。
+
+## L6-5 版本发布、灰度与回滚
+
+发布控制默认只做本地预检和离线演练，不启用邮件、外部投递、Keychain 写入或 LaunchAgent 安装：
+
+```bash
+python3 tools/release.py prepare --version <version> --allow-dirty
+python3 tools/release.py preflight --version <version>
+python3 tools/release.py verify-package releases/packages/market-pipeline-<version>.tar.gz
+python3 tools/release.py drill
+python3 tools/release.py status
+```
+
+`promote` 默认只输出预览；灰度或正式激活必须提供人工批准、角色、理由和至少两次 Canary 结果。`rollback` 同样需要人工批准。发布锁、SQLite release 字段、checkpoint 版本兼容性和部署漂移检查会 fail-closed；历史输出、运行中的任务和数据库不会被发布或回滚操作删除。

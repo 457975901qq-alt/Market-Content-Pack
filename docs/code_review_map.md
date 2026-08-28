@@ -26,7 +26,6 @@ flowchart LR
 ## 关键产物
 
 - `outputs/.../market_content/market_content.json`
-- `outputs/.../market_content/douyin.md`
 - `outputs/.../market_sources/`
 - `runtime/.../plans/` 与 `runtime/.../decisions/`
 - `runtime/.../reviews/`

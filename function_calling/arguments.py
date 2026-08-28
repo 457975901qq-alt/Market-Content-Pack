@@ -3,7 +3,9 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from datetime import datetime, timezone
+
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class Edition(str, Enum):
@@ -14,13 +16,21 @@ class Edition(str, Enum):
 class SafeArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    run_id: str = Field(pattern=r"^market_\d{8}_\d{4}$")
+    run_id: str = Field(pattern=r"^market_\d{8}_\d{4}(?:_[a-z0-9]{4,8})?$")
     edition: Edition
     timeout_seconds: float = Field(default=120, gt=0, le=1200)
 
 
 class CollectMarketDataArgs(SafeArgs):
     symbols: list[str] = Field(min_length=1)
+    as_of: datetime | None = None
+
+    @field_validator("as_of")
+    @classmethod
+    def timezone_aware_as_of(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("as_of must be timezone-aware ISO 8601")
+        return value.astimezone(timezone.utc) if value is not None else None
 
 
 class CollectNewsArgs(SafeArgs):
@@ -55,6 +65,103 @@ class ValidateContentArgs(SafeArgs):
 
 class FinalQualityGateArgs(SafeArgs):
     validation_paths: list[str] = Field(min_length=1)
+
+
+class CrosscheckMarketQuoteArgs(SafeArgs):
+    symbol: str = Field(
+        min_length=1,
+        pattern=r"^[A-Za-z0-9.^=-]+$",
+        validation_alias=AliasChoices("symbol", "ticker"),
+    )
+    as_of: datetime | None = None
+
+    @field_validator("as_of")
+    @classmethod
+    def timezone_aware_as_of(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("as_of must be timezone-aware ISO 8601")
+        return value.astimezone(timezone.utc) if value is not None else None
+
+    @property
+    def ticker(self) -> str:
+        return self.symbol
+
+
+class GetMarketQuoteArgs(SafeArgs):
+    symbol: str = Field(
+        min_length=1,
+        pattern=r"^[A-Za-z0-9.^=-]+$",
+        validation_alias=AliasChoices("symbol", "ticker"),
+    )
+    as_of: datetime | None = None
+
+    @field_validator("as_of")
+    @classmethod
+    def timezone_aware_as_of(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("as_of must be timezone-aware ISO 8601")
+        return value.astimezone(timezone.utc) if value is not None else None
+
+    @property
+    def ticker(self) -> str:
+        return self.symbol
+
+
+class GenerateMarketSectionArgs(GenerateContentArgs):
+    section: str = Field(min_length=1)
+
+
+class SchemaCheckArgs(ValidateContentArgs):
+    pass
+
+
+class GroundingCheckArgs(ValidateContentArgs):
+    pass
+
+
+class TemporalCheckArgs(ValidateContentArgs):
+    pass
+
+
+class AnalyzeGapArgs(SafeArgs):
+    validation_errors: list[dict[str, object]] = Field(default_factory=list)
+    current_state: dict[str, object] = Field(default_factory=dict)
+    artifact_manifest: dict[str, object] = Field(default_factory=dict)
+
+
+class SearchSourcesArgs(SafeArgs):
+    sources: list[str] = Field(min_length=1)
+
+
+class FetchSourceArgs(SafeArgs):
+    url: str = Field(min_length=8)
+
+
+class ReviewContentArgs(SafeArgs):
+    content_path: str
+    section: str | None = None
+
+
+class ReviewerGateArgs(SafeArgs):
+    content_path: str
+    section: str | None = None
+
+
+class RepairSectionArgs(SafeArgs):
+    section: str = Field(min_length=1)
+    reason: str | None = None
+
+
+class RegenerateSectionArgs(RepairSectionArgs):
+    pass
+
+
+class ReportArgs(SafeArgs):
+    content_path: str
+
+
+class SaveReportArgs(SafeArgs):
+    report_path: str
 
 
 def within_allowed_root(path_value: str, roots: tuple[Path, ...]) -> bool:

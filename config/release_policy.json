@@ -1,0 +1,25 @@
+{
+  "policy_version": 1,
+  "minimum_canary_runs": 2,
+  "canary_stability": {
+    "window_size": 10,
+    "eligible_run_mode": "shadow_canary"
+  },
+  "external_delivery_enabled": false,
+  "stages": ["shadow", "canary-1", "canary-2", "canary-3", "active"],
+  "candidate_job_routes": {
+    "shadow": [],
+    "canary-1": ["morning_content"],
+    "canary-2": ["morning_content", "morning_images"],
+    "canary-3": ["morning_content", "morning_images", "evening_content", "evening_images"],
+    "active": ["morning_content", "morning_images", "evening_content", "evening_images"]
+  },
+  "auto_pause": {
+    "p0": true,
+    "wrong_session": true,
+    "stale_input": true,
+    "schema_failure": true,
+    "text_image_mismatch": true,
+    "checkpoint_incompatible": true
+  }
+}

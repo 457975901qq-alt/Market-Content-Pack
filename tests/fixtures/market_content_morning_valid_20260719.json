@@ -24,11 +24,5 @@
     "title": "预览早盘复盘",
     "subtitle": "仅验证版本字段和质量门禁",
     "sections": [{"heading": "数据状态", "content": "预览数据，仅验证版式。"}]
-  },
-  "douyin": {
-    "title": "每日市场内容包早盘预览",
-    "cover_title": "仅验证早盘版式",
-    "caption": "预览数据，不用于发布。",
-    "hashtags": ["#预览"]
   }
 }

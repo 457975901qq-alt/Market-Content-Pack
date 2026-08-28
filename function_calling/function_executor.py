@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -102,7 +103,7 @@ class FunctionExecutor:
             error_type = str(getattr(exc, "error_type", "code_error"))
             error_code = str(getattr(exc, "error_code", "execution_error"))
             retryable = bool(getattr(exc, "retryable", False))
-            failed = self._failed(call, FunctionStatus.failed, error_code, str(exc), started, t0, retryable, error_type=error_type)
+            failed = self._failed(call, FunctionStatus.failed, error_code, str(exc), started, t0, retryable, error_type=error_type, error_traceback=traceback.format_exc())
 
         if not allow_recovery or self.recovery_handler is None or self._calls >= self.max_calls or self._by_step.get(call.step, 0) >= self.max_calls_per_step:
             return failed
@@ -139,5 +140,5 @@ class FunctionExecutor:
     def _rejected(self, call: FunctionCall, code: str, message: str, started: datetime, t0: float) -> FunctionResult:
         return FunctionResult(call_id=call.call_id, tool_name=call.tool_name, status=FunctionStatus.rejected, error=FunctionError(error_type="configuration_error", error_code=code, message=message, retryable=False), started_at=started, completed_at=datetime.now(timezone.utc), duration_ms=int((time.monotonic() - t0) * 1000))
 
-    def _failed(self, call: FunctionCall, status: FunctionStatus, code: str, message: str, started: datetime, t0: float, retryable: bool, error_type: str | None = None) -> FunctionResult:
-        return FunctionResult(call_id=call.call_id, tool_name=call.tool_name, status=status, error=FunctionError(error_type=error_type or ("transient_error" if retryable else "code_error"), error_code=code, message=message[:1000], retryable=retryable, remediation_step=call.step), started_at=started, completed_at=datetime.now(timezone.utc), duration_ms=int((time.monotonic() - t0) * 1000))
+    def _failed(self, call: FunctionCall, status: FunctionStatus, code: str, message: str, started: datetime, t0: float, retryable: bool, error_type: str | None = None, error_traceback: str | None = None) -> FunctionResult:
+        return FunctionResult(call_id=call.call_id, tool_name=call.tool_name, status=status, error=FunctionError(error_type=error_type or ("transient_error" if retryable else "code_error"), error_code=code, message=message[:1000], retryable=retryable, remediation_step=call.step, traceback=error_traceback[:12000] if error_traceback else None), started_at=started, completed_at=datetime.now(timezone.utc), duration_ms=int((time.monotonic() - t0) * 1000))

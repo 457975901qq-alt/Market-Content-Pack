@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from run_state import atomic_write_json
 from tool_router import ToolRouter
 
 
@@ -167,8 +168,10 @@ class ExecutionPlanner:
             "market_primary": market_primary["selected_tool"],
             "market_secondary": market_secondary["selected_tool"],
             "news_discovery": news["selected_tool"],
+            "news_fallback_chain": news.get("fallback_chain", []),
             "web_extraction": extraction["selected_tool"],
-            "text_only": True,
+            "web_fallback_chain": extraction.get("fallback_chain", []),
+            "text_only": text_only,
             "constraints": constraints,
             "created_at": _now(),
             "planner_version": PLAN_VERSION,
@@ -179,10 +182,7 @@ class ExecutionPlanner:
 
     @staticmethod
     def write(path: Path, plan: dict[str, Any]) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_name(path.name + ".tmp")
-        temporary.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        temporary.replace(path)
+        atomic_write_json(path, plan)
 
 
 def executor_step_for(step: str) -> str:

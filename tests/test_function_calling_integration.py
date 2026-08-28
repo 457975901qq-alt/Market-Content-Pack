@@ -32,7 +32,6 @@ def test_quality_gate_does_not_require_image_artifacts(tmp_path: Path) -> None:
     qa = tmp_path / "qa.json"
     content_dir.mkdir()
     content.write_text('{"edition":"evening_premarket_watch"}', encoding="utf-8")
-    (content_dir / "douyin.md").write_text("文字版内容", encoding="utf-8")
     qa.write_text('{"status":"pass","mode":"text"}', encoding="utf-8")
     context = BusinessContext(
         "market_20260720_1402",
@@ -55,7 +54,6 @@ def test_final_validation_does_not_require_image_artifacts(tmp_path: Path) -> No
     content_dir = tmp_path / "content"
     content_dir.mkdir()
     (content_dir / "market_content.json").write_text('{"edition":"evening_premarket_watch"}', encoding="utf-8")
-    (content_dir / "douyin.md").write_text("文字版内容", encoding="utf-8")
     logs_dir = tmp_path / "logs"
     logs_dir.mkdir()
     (logs_dir / "qa_report.json").write_text('{"status":"pass"}', encoding="utf-8")

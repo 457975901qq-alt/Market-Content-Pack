@@ -15,6 +15,23 @@
   "review_judge": "gemini",
   "batch_size": 10,
   "gemini_max_requests_per_run": 10,
-  "allow_production_update": false,
-  "allow_delivery": false
+  "allow_production_update": true,
+  "allow_delivery": false,
+  "quality_gate": {
+    "minimum_total_score": 90,
+    "minimum_fact_match_rate": 1.0,
+    "minimum_schema_pass_rate": 1.0,
+    "minimum_text_image_match_rate": 1.0,
+    "minimum_reviewer_pass_rate": 0.95,
+    "minimum_image_qa_pass_rate": 0.95,
+    "maximum_critical_regressions": 0,
+    "maximum_high_regressions": 0,
+    "maximum_p0_errors": 0,
+    "maximum_gold_instrument_errors": 0,
+    "maximum_wrong_session_errors": 0,
+    "maximum_stale_input_errors": 0,
+    "maximum_duration_increase_percent": 30,
+    "maximum_retry_rate_increase_percent": 20,
+    "maximum_fallback_rate_increase_percent": 20
+  }
 }

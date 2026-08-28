@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from run_state import atomic_write_json
+
 from .arguments import (
     CollectMarketDataArgs,
     CollectNewsArgs,
@@ -68,10 +70,7 @@ class BusinessContext:
 
 
 def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    atomic_write_json(path, payload)
 
 
 def _require_file(path: Path, label: str) -> None:
@@ -82,7 +81,10 @@ def _require_file(path: Path, label: str) -> None:
 def _collect_market_data(context: BusinessContext, args: CollectMarketDataArgs) -> dict[str, Any]:
     from market_quotes import collect_quotes, write_artifact
 
-    payload = collect_quotes(args.edition.value, symbols=args.symbols)
+    # Keep provider credentials, run_id, and runtime policy in the same
+    # controlled environment used by the other source bindings.
+    with context.activated_environment():
+        payload = collect_quotes(args.edition.value, symbols=args.symbols, as_of=args.as_of, required_symbols=args.symbols)
     write_artifact(payload, context.market_data_path)
     if payload.get("status") != "success":
         raise BusinessFunctionError("market_data_not_validated", error_type="data_validation_error", error_code="market_data_incomplete", retryable=True)
@@ -93,7 +95,11 @@ def _collect_news(context: BusinessContext, args: CollectNewsArgs) -> dict[str, 
     import source_router
 
     with context.activated_environment():
-        result = source_router.collect(Path(context.paths["sources"]), edition=args.edition.value)
+        result = source_router.collect(
+            Path(context.paths["sources"]),
+            edition=args.edition.value,
+            sources=args.sources,
+        )
     if not isinstance(result, dict):
         raise BusinessFunctionError("source_router_invalid_result", error_type="code_error", error_code="source_router_invalid_result")
     return {"status": "success", **result}
@@ -121,9 +127,13 @@ def _generate_content(context: BusinessContext, args: GenerateContentArgs) -> di
     with context.activated_environment():
         content_module.OUTPUT_DIR = Path(context.paths["content"])
         content_module.OUTPUT_JSON = context.content_path
-        content_module.PLATFORM_COPY_MD = Path(context.paths["content"]) / "douyin.md"
         edition_context = content_module._edition_context(args.edition.value)
         market_context = content_module.read_context(input_path, context.market_data_path)
+        market_data = json.loads(context.market_data_path.read_text(encoding="utf-8"))
+        source_materials = json.loads(context.source_path.read_text(encoding="utf-8")) if context.source_path.exists() else []
+        github_path = Path(context.paths.get("github", "")) / "ai_open_source_projects.json"
+        github_payload = json.loads(github_path.read_text(encoding="utf-8")) if github_path.exists() else {}
+        github_projects = github_payload.get("selected", []) if isinstance(github_payload, dict) else []
 
         def attempt(provider: str) -> dict[str, Any]:
             if args.raw_response_path:
@@ -131,13 +141,24 @@ def _generate_content(context: BusinessContext, args: GenerateContentArgs) -> di
             elif provider == "rule_template":
                 # The fallback is deterministic, but it must carry forward
                 # validated symbols so the data-lineage gate can still pass.
-                market_data = json.loads(context.market_data_path.read_text(encoding="utf-8"))
                 raw = json.dumps(
-                    content_module.rule_template_response(edition_context, market_data=market_data),
+                    content_module.rule_template_response(
+                        edition_context,
+                        market_data=market_data,
+                        source_materials=source_materials,
+                        github_projects=github_projects,
+                    ),
                     ensure_ascii=False,
                 )
             else:
-                raw = content_module.generate_with_provider(market_context, edition_context, provider)
+                raw = content_module.generate_with_provider(
+                    market_context,
+                    edition_context,
+                    provider,
+                    market_data=market_data,
+                    source_materials=source_materials,
+                    github_projects=github_projects,
+                )
             return content_module.run(raw, edition=args.edition.value, market_data_path=context.market_data_path)
 
         providers = [args.provider]
@@ -177,7 +198,11 @@ def _validate_market_data(context: BusinessContext, args: ValidateMarketDataArgs
     path = Path(args.market_data_path)
     _require_file(path, "market_data")
     payload = json.loads(path.read_text(encoding="utf-8"))
-    required = set(payload.get("required_symbols") or {"SPX", "NDX", "DJI"})
+    if payload.get("required_symbols"):
+        required = {str(item) for item in payload["required_symbols"]}
+    else:
+        from market_quotes import CORE_SYMBOLS
+        required = set(CORE_SYMBOLS)
     actual = {str(item.get("symbol")) for item in payload.get("quotes", []) if isinstance(item, dict)}
     missing = sorted(required - actual)
     if payload.get("status") != "success" or missing:
@@ -199,7 +224,7 @@ def _final_quality_gate(context: BusinessContext, args: FinalQualityGateArgs) ->
     from text_validation import validate_text_artifacts
 
     qa_path = Path(args.validation_paths[0]) if args.validation_paths else None
-    result = validate_text_artifacts(context.content_path, Path(context.paths["content"]) / "douyin.md", expected_edition=args.edition.value)
+    result = validate_text_artifacts(context.content_path, expected_edition=args.edition.value)
     if qa_path is None or not qa_path.exists() or qa_path.stat().st_size == 0:
         result["critical_errors"].append("qa_report_file")
         result["status"] = "fail"

@@ -15,7 +15,7 @@ def _payload(case: dict[str, Any], candidate_output: dict[str, Any] | None) -> d
 
 def _text(payload: dict[str, Any]) -> str:
     parts = [payload.get("text", ""), payload.get("summary", ""), payload.get("headline", "")]
-    for key in ("platform_copy", "content", "market_content"):
+    for key in ("content", "market_content"):
         value = payload.get(key)
         if isinstance(value, dict):
             parts.append(json.dumps(value, ensure_ascii=False))

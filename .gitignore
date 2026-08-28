@@ -1,5 +1,11 @@
 .env
 *.env
+.env.*
+!.env.example
+.env~
+.env.bak
+secrets/
+config/security/operators.json
 __pycache__/
 *.pyc
 logs/
@@ -31,5 +37,6 @@ env/
 *.pem
 *.key
 *.p12
+*.pfx
 *.cookie
 cookies.*

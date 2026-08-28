@@ -18,12 +18,13 @@ from zoneinfo import ZoneInfo
 
 from edition_profiles import EditionContext, resolve_edition_context
 from model_providers import ProviderError, call_gemini, call_ollama
+from market_quotes import CORE_SYMBOLS
+from security import get_secret, validate_url
 
 
 ROOT = Path(__file__).resolve().parent
 OUTPUT_DIR = Path(os.environ.get("MARKET_CONTENT_OUTPUT_DIR", str(ROOT / "outputs" / "market_content"))).expanduser().resolve()
 OUTPUT_JSON = OUTPUT_DIR / "market_content.json"
-PLATFORM_COPY_MD = OUTPUT_DIR / "douyin.md"
 ERROR_LOG = Path(os.environ.get("MARKET_CONTENT_ERROR_LOG", str(ROOT / "logs" / "market_content_errors.log"))).expanduser().resolve()
 TOKYO = ZoneInfo("Asia/Tokyo")
 
@@ -33,6 +34,25 @@ INVESTMENT_DISCLAIMER = "仅作信息整理与情景分析，不构成个性化�
 _INVESTMENT_STANCES = ["偏积极观察", "中性观察", "偏谨慎", "数据不足"]
 _INVESTMENT_ACTIONS = ["观察", "等待验证", "控制风险", "数据不足"]
 _MARKET_REGIMES = ["risk_on", "risk_off", "mixed", "insufficient_data"]
+LEGACY_INDEX_SYMBOLS = ("SPX", "NDX", "DJI")
+DAILY_SECTION_DEFINITIONS = (
+    ("top_catalysts", "今日Top 3市场催化剂"),
+    ("ai_semiconductors", "AI与半导体"),
+    ("mega_tech", "大科技"),
+    ("us_macro", "美国宏观"),
+    ("global_central_banks", "全球央行"),
+    ("geopolitics_policy", "地缘政治与政策"),
+    ("index_rebalances", "指数调整"),
+    ("etf_flows", "ETF调仓与资金流"),
+    ("opex_derivatives", "OPEX与衍生品"),
+    ("treasuries_liquidity", "美债与流动性"),
+    ("oil_commodities", "原油与大宗商品"),
+    ("ipo_financing", "IPO与融资"),
+    ("breaking_news", "突发新闻"),
+    ("github_ai_projects", "GitHub热门AI项目"),
+    ("asset_impact", "对重点资产的影响"),
+)
+DAILY_SECTION_IDS = {section_id for section_id, _ in DAILY_SECTION_DEFINITIONS}
 
 
 MARKET_CONTENT_SCHEMA: dict[str, Any] = {
@@ -57,8 +77,8 @@ MARKET_CONTENT_SCHEMA: dict[str, Any] = {
         "earnings",
         "risk_factors",
         "analysis_text",
+        "daily_sections",
         "ai_investment_view",
-        "douyin",
     ],
     "properties": {
         "date": {"type": "string"},
@@ -154,6 +174,23 @@ MARKET_CONTENT_SCHEMA: dict[str, Any] = {
                 },
             },
         },
+        "daily_sections": {
+            "type": "array",
+            "minItems": 15,
+            "maxItems": 15,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["section_id", "title", "status", "content", "evidence"],
+                "properties": {
+                    "section_id": {"type": "string", "enum": sorted(DAILY_SECTION_IDS)},
+                    "title": {"type": "string", "minLength": 1},
+                    "status": {"type": "string", "enum": ["available", "partial", "unavailable"]},
+                    "content": {"type": "string", "minLength": 1},
+                    "evidence": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
         "ai_investment_view": {
             "type": "object",
             "additionalProperties": False,
@@ -178,17 +215,6 @@ MARKET_CONTENT_SCHEMA: dict[str, Any] = {
                 "invalidation_conditions": {"type": "array", "items": {"type": "string"}, "minItems": 1},
                 "suggestions": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 3},
                 "disclaimer": {"type": "string", "const": INVESTMENT_DISCLAIMER},
-            },
-        },
-        "douyin": {
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["title", "cover_title", "caption", "hashtags"],
-            "properties": {
-                "title": {"type": "string"},
-                "cover_title": {"type": "string"},
-                "caption": {"type": "string"},
-                "hashtags": {"type": "array", "items": {"type": "string"}},
             },
         },
     },
@@ -223,7 +249,7 @@ def log_market_error(error_type: str, raw_response: str, failure_position: str, 
 
 
 def clear_outputs_on_failure() -> None:
-    for path in [OUTPUT_JSON, PLATFORM_COPY_MD]:
+    for path in [OUTPUT_JSON]:
         try:
             if path.exists():
                 path.unlink()
@@ -266,12 +292,16 @@ def build_prompt(market_context: str, context: EditionContext | None = None) -> 
         "edition_fields": {field: "string" for field in context.version_fields},
         "summary": "string",
         "key_points": ["string"],
-        "major_indexes": [{"name": "string", "ticker": "SPX|NDX|DJI", "change_percent": "string", "reason": "string"}],
+        "major_indexes": [{"name": "string", "ticker": "VOO|QQQM", "change_percent": "string", "reason": "string"}],
         "important_stocks": [{"name": "string", "ticker": "string", "change_percent": "string", "reason": "string"}],
         "macro_events": [],
         "earnings": [],
         "risk_factors": ["string"],
         "analysis_text": {"title": "string", "subtitle": "string", "sections": [{"heading": "string", "content": "string"}]},
+        "daily_sections": [
+            {"section_id": section_id, "title": title, "status": "available|partial|unavailable", "content": "只使用有来源支持的事实；无数据时写数据暂缺。", "evidence": ["source_id 或 source_url"]}
+            for section_id, title in DAILY_SECTION_DEFINITIONS
+        ],
         "ai_investment_view": {
             "market_environment": {"regime": "risk_on|risk_off|mixed|insufficient_data", "summary": "当前市场环境", "confidence": 0.0, "signals": ["已验证信号"]},
             "stance": "偏积极观察|中性观察|偏谨慎|数据不足",
@@ -283,7 +313,6 @@ def build_prompt(market_context: str, context: EditionContext | None = None) -> 
             "suggestions": ["最多三条非个性化观察或风险管理建议"],
             "disclaimer": INVESTMENT_DISCLAIMER,
         },
-        "douyin": {"title": "string", "cover_title": "string", "caption": "string", "hashtags": ["string"]},
     }
     return f"""
 {context.prompt_text}
@@ -297,7 +326,7 @@ def build_prompt(market_context: str, context: EditionContext | None = None) -> 
 最终输出协议（必须严格遵守）：
 - 只输出一个 JSON 对象，不要 Markdown、解释文字或其他 schema。
 - 必须包含下面示例中的全部顶层 key；不要把 summary 改成对象，不要输出 assets、analysis 等未定义 key。
-- `major_indexes` 至少逐项覆盖输入行情中的 SPX、NDX、DJI；`important_stocks` 只使用输入行情中的代码。
+- `major_indexes` 至少逐项覆盖输入行情中的 VOO、QQQM；它们是 ETF 资产，不要称为指数；`important_stocks` 只使用输入行情中的代码。
 - `date` 必须逐字等于 `{context.scheduled_cutoff.astimezone(TOKYO).date().isoformat()}`，不要使用当前系统日期。
 - 所有数组和字符串字段即使没有合格事实也必须按 schema 返回；不要用空字符串替代必填结论。
 - `ai_investment_view` 只能是非个性化的情景分析，不得输出买入、卖出、加仓、减仓、做多、做空、目标价或止损价。
@@ -305,14 +334,18 @@ def build_prompt(market_context: str, context: EditionContext | None = None) -> 
 - `ai_investment_view.suggestions` 最多三条，只能是观察、等待验证、风险管理或分散化框架，不得针对个人账户给出仓位、金额或具体交易指令。
 - `ai_investment_view.evidence` 只能引用输入中的 source_id、source_url 或结构化行情字段；数据不足时 stance/action 必须为“数据不足”。
 - `ai_investment_view.disclaimer` 必须逐字等于“{INVESTMENT_DISCLAIMER}”。
+- daily_sections 必须完整包含 15 个固定栏目，每项只能使用输入素材和结构化行情中的事实；无可靠来源时使用 status=unavailable 并明确写“数据暂缺”，不得猜测。
+- top_catalysts 最多列出 3 个催化剂；重点资产影响只能描述输入证据对已出现的指数、行业、股票、ETF、利率、美元或大宗商品的影响。
 {json.dumps(output_contract, ensure_ascii=False, indent=2)}
 """.strip()
 
 
 def call_openai(market_context: str, context: EditionContext | None = None) -> str:
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
+    secret = get_secret("OPENAI_API_KEY", consumer="content_generator", purpose="generate_market_content", run_id=os.environ.get("MARKET_RUN_ID", "unspecified"))
+    if secret is None:
         raise MarketContentError("api_key_missing", "OPENAI_API_KEY is not set.", "", "call_openai")
+    api_key = secret.reveal("generate_market_content")
+    validate_url(OPENAI_URL, consumer="content_generator", purpose="generate_market_content")
 
     body = {
         "model": DEFAULT_MODEL,
@@ -365,7 +398,126 @@ def call_openai(market_context: str, context: EditionContext | None = None) -> s
     return "".join(chunks)
 
 
-def rule_template_response(context: EditionContext, market_data: dict[str, Any] | None = None) -> dict[str, Any]:
+def _quote_is_usable(quote: dict[str, Any]) -> bool:
+    """Accept only numeric, non-conflicting quote facts for fallback copy."""
+    change = quote.get("change_pct")
+    if not isinstance(change, (int, float)):
+        return False
+    if (quote.get("freshness") or {}).get("stale", False):
+        return False
+    if (quote.get("cross_check") or {}).get("conflict", False):
+        return False
+    return True
+
+
+def _quote_evidence(quote: dict[str, Any]) -> str:
+    source_id = str(quote.get("source_id") or "structured_market_data")
+    source_url = str(quote.get("source_url") or "")
+    return f"{source_id} {source_url}".strip()
+
+
+def _market_asset_symbols(market_data: dict[str, Any] | None, quotes: list[dict[str, Any]]) -> tuple[str, ...]:
+    """Resolve the active production asset set without relabeling ETFs as indices.
+
+    A saved artifact with explicit ``required_symbols`` is authoritative.  The
+    legacy branch keeps old fixtures and explicit historical tests readable;
+    new production artifacts always carry VOO/QQQM from market_data_policy.
+    """
+    if isinstance(market_data, dict) and market_data.get("required_symbols"):
+        return tuple(str(item) for item in market_data["required_symbols"])
+    present = {str(item.get("symbol")) for item in quotes if isinstance(item, dict)}
+    if present & set(CORE_SYMBOLS):
+        return tuple(symbol for symbol in CORE_SYMBOLS if symbol in present) or CORE_SYMBOLS
+    if present & set(LEGACY_INDEX_SYMBOLS):
+        return tuple(symbol for symbol in LEGACY_INDEX_SYMBOLS if symbol in present)
+    return CORE_SYMBOLS
+
+
+def _format_change(change: Any) -> str:
+    if not isinstance(change, (int, float)):
+        return "数据暂缺"
+    return f"{float(change):+.2f}%"
+
+
+def _fallback_daily_sections(
+    quotes: list[dict[str, Any]],
+    source_materials: list[dict[str, Any]] | None = None,
+    github_projects: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Build only source-backed sections; unsupported themes stay unavailable."""
+    sections = {section_id: {
+        "section_id": section_id,
+        "title": title,
+        "status": "unavailable",
+        "content": "数据暂缺，等待合格来源。",
+        "evidence": [],
+    } for section_id, title in DAILY_SECTION_DEFINITIONS}
+    usable = [quote for quote in quotes if _quote_is_usable(quote)]
+    by_symbol = {str(quote.get("symbol")): quote for quote in usable}
+    market_symbols = _market_asset_symbols(None, quotes)
+    indexes = [by_symbol[symbol] for symbol in market_symbols if symbol in by_symbol]
+
+    if indexes:
+        index_text = "、".join(
+            f"{quote.get('display_name') or quote.get('symbol')} {_format_change(quote.get('change_pct'))}"
+            for quote in indexes
+        )
+        evidence = [_quote_evidence(quote) for quote in indexes]
+        sections["top_catalysts"].update({
+            "status": "partial" if len(indexes) < len(market_symbols) else "available",
+            "content": f"已核验行情显示：{index_text}。这是价格事实，不等同于已确认的因果催化剂。",
+            "evidence": evidence,
+        })
+        sections["asset_impact"].update({
+            "status": "partial" if len(indexes) < len(market_symbols) else "available",
+            "content": f"已核验指数表现为：{index_text}；其他资产影响暂无足够来源支持的确定性结论。",
+            "evidence": evidence,
+        })
+
+    nvda = by_symbol.get("NVDA")
+    if nvda:
+        sections["ai_semiconductors"].update({
+            "status": "available",
+            "content": f"已核验 {nvda.get('display_name') or 'NVDA'} 涨跌幅 {_format_change(nvda.get('change_pct'))}；未从当前证据中确认新的公司事件因果。",
+            "evidence": [_quote_evidence(nvda)],
+        })
+
+    mega_tech = [by_symbol[symbol] for symbol in ("MSFT", "AAPL") if symbol in by_symbol]
+    if mega_tech:
+        sections["mega_tech"].update({
+            "status": "partial" if len(mega_tech) < 2 else "available",
+            "content": "已核验 " + "、".join(
+                f"{quote.get('display_name') or quote.get('symbol')} {_format_change(quote.get('change_pct'))}"
+                for quote in mega_tech
+            ) + "；暂无足够来源支持的新增公司事件结论。",
+            "evidence": [_quote_evidence(quote) for quote in mega_tech],
+        })
+
+    projects = [item for item in (github_projects or []) if isinstance(item, dict) and item.get("full_name")]
+    if projects:
+        project_parts = []
+        evidence = []
+        for item in projects[:3]:
+            stars = item.get("stargazers_count")
+            star_text = f"约 {int(stars):,} stars" if isinstance(stars, (int, float)) else "Star 数暂缺"
+            project_parts.append(f"{item['full_name']}（{star_text}）")
+            if item.get("html_url"):
+                evidence.append(str(item["html_url"]))
+        sections["github_ai_projects"].update({
+            "status": "available",
+            "content": "当前 GitHub artifact 收录：" + "；".join(project_parts) + "。Star 数仅作项目热度参考，不等同于投资建议。",
+            "evidence": evidence,
+        })
+
+    return [sections[section_id] for section_id, _ in DAILY_SECTION_DEFINITIONS]
+
+
+def rule_template_response(
+    context: EditionContext,
+    market_data: dict[str, Any] | None = None,
+    source_materials: list[dict[str, Any]] | None = None,
+    github_projects: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Build a conservative fallback from validated market data only.
 
     With no market data this preserves the old status-only response. When a
@@ -374,7 +526,7 @@ def rule_template_response(context: EditionContext, market_data: dict[str, Any] 
     """
     fields = {field: "数据暂缺，等待合格来源" for field in context.version_fields}
     quotes = [item for item in (market_data or {}).get("quotes", []) if isinstance(item, dict)]
-    index_symbols = {"SPX", "NDX", "DJI"}
+    index_symbols = set(_market_asset_symbols(market_data, quotes))
     major_indexes = []
     important_stocks = []
     for quote in quotes:
@@ -395,6 +547,27 @@ def rule_template_response(context: EditionContext, market_data: dict[str, Any] 
                 "reason": "保留已验证行情；模型内容生成不可用。",
             })
     investment_view = _investment_view_from_validated_quotes(quotes)
+    daily_sections = _fallback_daily_sections(quotes, source_materials, github_projects)
+    usable_quotes = [quote for quote in quotes if _quote_is_usable(quote)]
+    if len({str(quote.get("symbol")) for quote in usable_quotes} & index_symbols) >= len(index_symbols):
+        summary = "已核验行情显示核心市场 ETF 数据完整；新闻与宏观事件暂无足够交叉验证的确定性结论。"
+        key_points = ["VOO 与 QQQM 行情已完成来源交叉核对。", "AI 与大科技个股仅保留已核验价格事实。"]
+        analysis_text = {
+            "title": "行情与来源状态",
+            "subtitle": "保留结构化行情，未把价格变动解释为未经证实的催化剂。",
+            "sections": [
+                {"heading": "已核验行情", "content": summary},
+                {"heading": "数据边界", "content": "宏观、政策、资金流和衍生品栏目仅在获得满足时效与来源要求的证据后填充。"},
+            ],
+        }
+    else:
+        summary = "数据暂缺：暂无足够经过校验的市场数据，公开发布已阻止。"
+        key_points = ["请等待合格行情和新闻来源接入。"]
+        analysis_text = {
+            "title": "市场数据暂缺",
+            "subtitle": "仅保留状态，不生成未经来源支持的数字",
+            "sections": [{"heading": "数据状态", "content": "等待合格来源后再生成内容。"}],
+        }
     return {
         "date": context.scheduled_cutoff.astimezone(TOKYO).date().isoformat(),
         "timezone": "Asia/Tokyo",
@@ -406,39 +579,31 @@ def rule_template_response(context: EditionContext, market_data: dict[str, Any] 
         "source_window_end": context.source_window_end.isoformat(),
         "market_session": context.market_session,
         "edition_fields": fields,
-        "summary": "数据暂缺：暂无足够经过校验的市场数据，公开发布已阻止。",
-        "key_points": ["请等待合格行情和新闻来源接入。"],
+        "summary": summary,
+        "key_points": key_points,
         "major_indexes": major_indexes,
         "important_stocks": important_stocks,
         "macro_events": [],
         "earnings": [],
         "risk_factors": ["数据来源不足，不能形成确定性结论。"],
-        "analysis_text": {
-            "title": "市场数据暂缺",
-            "subtitle": "仅保留状态，不生成未经来源支持的数字",
-            "sections": [{"heading": "数据状态", "content": "等待合格来源后再生成内容。"}],
-        },
+        "analysis_text": analysis_text,
+        "daily_sections": daily_sections,
         "ai_investment_view": investment_view,
-        "douyin": {
-            "title": "每日市场内容包",
-            "cover_title": "数据暂缺",
-            "caption": "当前没有足够经过校验的来源，暂不发布。",
-            "hashtags": [],
-        },
     }
 
 
 def _investment_view_from_validated_quotes(quotes: list[dict[str, Any]]) -> dict[str, Any]:
     """Build a conservative, non-personalized view from validated quotes only."""
+    market_symbols = set(_market_asset_symbols(None, quotes))
     indexes = [
         quote for quote in quotes
-        if quote.get("symbol") in {"SPX", "NDX", "DJI"}
+        if quote.get("symbol") in market_symbols
         and isinstance(quote.get("change_pct"), (int, float))
         and quote.get("source_url")
         and not (quote.get("freshness") or {}).get("stale", False)
         and not (quote.get("cross_check") or {}).get("conflict", False)
     ]
-    if len(indexes) < 3:
+    if len(indexes) < len(market_symbols):
         return {
             "market_environment": {
                 "regime": "insufficient_data",
@@ -448,10 +613,10 @@ def _investment_view_from_validated_quotes(quotes: list[dict[str, Any]]) -> dict
             },
             "stance": "数据不足",
             "action": "数据不足",
-            "thesis": "关键指数尚未全部通过来源、时效和交叉核对，暂不形成方向性判断。",
+            "thesis": "核心市场资产尚未全部通过来源、时效和交叉核对，暂不形成方向性判断。",
             "evidence": ["validated_index_set_incomplete"],
             "risks": ["缺少完整指数或来源存在冲突。"],
-            "invalidation_conditions": ["SPX、NDX、DJI 完成有效交叉核对后重新评估。"],
+            "invalidation_conditions": ["VOO、QQQM 完成有效交叉核对后重新评估。"],
             "suggestions": ["等待完整行情和来源交叉验证后再评估。"],
             "disclaimer": INVESTMENT_DISCLAIMER,
         }
@@ -498,14 +663,21 @@ def _investment_view_from_validated_quotes(quotes: list[dict[str, Any]]) -> dict
     }
 
 
-def generate_with_provider(market_context: str, context: EditionContext, provider: str) -> str:
+def generate_with_provider(
+    market_context: str,
+    context: EditionContext,
+    provider: str,
+    market_data: dict[str, Any] | None = None,
+    source_materials: list[dict[str, Any]] | None = None,
+    github_projects: list[dict[str, Any]] | None = None,
+) -> str:
     prompt = build_prompt(market_context, context)
     try:
         if provider == "auto":
             errors: list[str] = []
             for fallback in ("ollama", "gemini", "rule_template"):
                 try:
-                    raw = generate_with_provider(market_context, context, fallback)
+                    raw = generate_with_provider(market_context, context, fallback, market_data, source_materials, github_projects)
                     candidate = parse_json_response(raw)
                     _normalize_run_metadata(candidate, context)
                     validate_market_content(candidate, raw, context)
@@ -518,7 +690,7 @@ def generate_with_provider(market_context: str, context: EditionContext, provide
         if provider == "gemini":
             return call_gemini(prompt)
         if provider == "rule_template":
-            return json.dumps(rule_template_response(context), ensure_ascii=False)
+            return json.dumps(rule_template_response(context, market_data, source_materials, github_projects), ensure_ascii=False)
         if provider == "openai":
             return call_openai(market_context, context)
     except ProviderError as exc:
@@ -633,6 +805,56 @@ def _attach_edition_metadata(data: dict[str, Any], context: EditionContext, raw_
         _check_or_fill(data, key, str(expected[key]), raw_response)
 
 
+def _unavailable_daily_sections() -> list[dict[str, Any]]:
+    return [
+        {
+            "section_id": section_id,
+            "title": title,
+            "status": "unavailable",
+            "content": "数据暂缺，等待合格来源。",
+            "evidence": [],
+        }
+        for section_id, title in DAILY_SECTION_DEFINITIONS
+    ]
+
+
+def _normalize_daily_sections(data: dict[str, Any], raw_response: str) -> None:
+    raw_sections = data.get("daily_sections")
+    if raw_sections is None:
+        # Preserve compatibility with older JSON while ensuring every new
+        # output has the complete, explicit daily section contract.
+        data["daily_sections"] = _unavailable_daily_sections()
+        return
+    if not isinstance(raw_sections, list):
+        raise MarketContentError("daily_sections_invalid", "daily_sections must be a list.", raw_response, "daily_sections")
+
+    expected_titles = dict(DAILY_SECTION_DEFINITIONS)
+    by_id: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(raw_sections):
+        position = f"daily_sections[{index}]"
+        if not isinstance(item, dict):
+            raise MarketContentError("daily_sections_invalid", f"{position} must be an object.", raw_response, position)
+        section_id = item.get("section_id")
+        if section_id not in expected_titles:
+            raise MarketContentError("daily_sections_invalid", f"{position}.section_id is not allowed.", raw_response, f"{position}.section_id")
+        if section_id in by_id:
+            raise MarketContentError("daily_sections_invalid", f"duplicate section_id: {section_id}.", raw_response, f"{position}.section_id")
+        if item.get("title") != expected_titles[section_id]:
+            raise MarketContentError("daily_sections_invalid", f"{position}.title does not match the fixed title.", raw_response, f"{position}.title")
+        if item.get("status") not in {"available", "partial", "unavailable"}:
+            raise MarketContentError("daily_sections_invalid", f"{position}.status is not allowed.", raw_response, f"{position}.status")
+        if not isinstance(item.get("content"), str) or not item["content"].strip():
+            raise MarketContentError("daily_sections_invalid", f"{position}.content is missing or empty.", raw_response, f"{position}.content")
+        if not isinstance(item.get("evidence"), list) or any(not isinstance(value, str) or not value.strip() for value in item["evidence"]):
+            raise MarketContentError("daily_sections_invalid", f"{position}.evidence must be a string list.", raw_response, f"{position}.evidence")
+        by_id[section_id] = item
+
+    missing = [section_id for section_id, _ in DAILY_SECTION_DEFINITIONS if section_id not in by_id]
+    if missing:
+        raise MarketContentError("daily_sections_missing", f"Missing daily sections: {missing}.", raw_response, "daily_sections")
+    data["daily_sections"] = [by_id[section_id] for section_id, _ in DAILY_SECTION_DEFINITIONS]
+
+
 def validate_market_content(
     data: dict[str, Any],
     raw_response: str = "",
@@ -644,6 +866,7 @@ def validate_market_content(
     require_non_empty_string(data, "timezone")
     require_non_empty_string(data, "summary")
     require_non_empty_list(data, "key_points")
+    _normalize_daily_sections(data, raw_response)
     edition_fields = data.get("edition_fields")
     if not isinstance(edition_fields, dict):
         raise MarketContentError("edition_fields_missing", "edition_fields must be an object.", raw_response, "edition_fields")
@@ -701,33 +924,6 @@ def _normalize_run_metadata(parsed: dict[str, Any], context: EditionContext) -> 
 def write_outputs(data: dict[str, Any]) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    douyin = data.get("douyin") or {}
-    hashtags = " ".join(douyin.get("hashtags") or [])
-    PLATFORM_COPY_MD.write_text(
-        "\n".join(
-            [
-                "# 抖音文案",
-                "",
-                f"标题：{douyin.get('title', '')}",
-                f"封面标题：{douyin.get('cover_title', '')}",
-                "",
-                douyin.get("caption", ""),
-                "",
-                "AI投资观察（非个性化）",
-                f"判断：{(data.get('ai_investment_view') or {}).get('stance', '')}",
-                f"框架：{(data.get('ai_investment_view') or {}).get('action', '')}",
-                f"市场环境：{((data.get('ai_investment_view') or {}).get('market_environment') or {}).get('regime', '')}",
-                f"结论：{(data.get('ai_investment_view') or {}).get('thesis', '')}",
-                f"建议框架：{'；'.join((data.get('ai_investment_view') or {}).get('suggestions', []))}",
-                f"风险：{'；'.join((data.get('ai_investment_view') or {}).get('risks', []))}",
-                (data.get('ai_investment_view') or {}).get('disclaimer', INVESTMENT_DISCLAIMER),
-                "",
-                hashtags,
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
 
 
 def read_context(path: Path | None, market_data_path: Path | None = None) -> str:
@@ -796,7 +992,7 @@ def run(raw_response: str, edition: str | None = None, started_at: dt.datetime |
         market_data = json.loads(market_data_path.read_text(encoding="utf-8"))
         if market_data.get("status") != "success":
             raise MarketContentError("market_data_not_validated", "Structured market data is not validated.", json.dumps(market_data, ensure_ascii=False), "market_data")
-        required_symbols = {str(item) for item in market_data.get("required_symbols") or ("SPX", "NDX", "DJI")}
+        required_symbols = {str(item) for item in market_data.get("required_symbols") or CORE_SYMBOLS}
         quote_symbols = {str(item.get("symbol")) for item in market_data.get("quotes", []) if isinstance(item, dict)}
         content_symbols = {str(item.get("ticker")) for item in parsed.get("major_indexes", []) if isinstance(item, dict)}
         missing_symbols = sorted((required_symbols & quote_symbols) - content_symbols)
@@ -847,7 +1043,6 @@ def main() -> int:
         return 1
 
     print(OUTPUT_JSON)
-    print(PLATFORM_COPY_MD)
     return 0
 
 

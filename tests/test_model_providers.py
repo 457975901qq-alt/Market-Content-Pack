@@ -48,6 +48,27 @@ class ModelProviderTests(unittest.TestCase):
         self.assertEqual(view["disclaimer"], INVESTMENT_DISCLAIMER)
         self.assertTrue(all("source_id=" in item for item in view["evidence"]))
 
+    def test_rule_template_uses_verified_quotes_and_github_without_fabricating_other_sections(self):
+        context = resolve_edition_context("evening_premarket_watch")
+        quotes = [
+            {"symbol": "SPX", "display_name": "标普500", "asset_type": "index", "change_pct": 0.6, "source_id": "spx", "source_url": "https://example.test/spx"},
+            {"symbol": "NDX", "display_name": "纳斯达克100", "asset_type": "index", "change_pct": 1.2, "source_id": "ndx", "source_url": "https://example.test/ndx"},
+            {"symbol": "DJI", "display_name": "道琼斯", "asset_type": "index", "change_pct": 0.3, "source_id": "dji", "source_url": "https://example.test/dji"},
+            {"symbol": "NVDA", "display_name": "NVDA", "asset_type": "stock", "change_pct": 2.2, "source_id": "nvda", "source_url": "https://example.test/nvda"},
+        ]
+        payload = rule_template_response(
+            context,
+            market_data={"status": "success", "quotes": quotes},
+            github_projects=[{"full_name": "demo/agent", "stargazers_count": 1234, "html_url": "https://github.com/demo/agent"}],
+        )
+        sections = {item["section_id"]: item for item in payload["daily_sections"]}
+        self.assertNotEqual(sections["top_catalysts"]["status"], "unavailable")
+        self.assertIn("+1.20%", sections["top_catalysts"]["content"])
+        self.assertEqual(sections["ai_semiconductors"]["status"], "available")
+        self.assertEqual(sections["github_ai_projects"]["status"], "available")
+        self.assertEqual(sections["us_macro"]["status"], "unavailable")
+        self.assertIn("已核验行情", payload["summary"])
+
     def test_health_check_does_not_expose_credentials(self):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "secret-value", "GEMINI_MODEL": "test-model"}, clear=False):
             status = health_check("gemini")

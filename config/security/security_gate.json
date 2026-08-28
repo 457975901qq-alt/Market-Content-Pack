@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "production": {
+    "block_plaintext_env": true,
+    "block_external_delivery_unless_approved": true,
+    "require_secret_inventory_without_plaintext": true,
+    "require_release_gate": true,
+    "require_audit_chain": true
+  },
+  "development": {
+    "allow_local_env_with_secure_permissions": true,
+    "external_delivery_default": false
+  }
+}

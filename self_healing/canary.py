@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from security import build_subprocess_env
 from .agent import RepairAdapters, RepairController
 
 
@@ -115,7 +116,8 @@ def run_fixture_suite(root: Path = ROOT) -> dict[str, Any]:
             "gemini_invalid_json": ("generate_content", "Gemini JSON parse failure"),
         }
         step, message = messages[fault]
-        context = {"missing_symbols": ["SPX", "NDX", "DJI"]} if fault == "market_data_incomplete" else {}
+        from market_quotes import CORE_SYMBOLS
+        context = {"missing_symbols": list(CORE_SYMBOLS)} if fault == "market_data_incomplete" else {}
         result = controller.repair(f"fault_{index}", step, message, context)
         repair = result["result"]
         fault_result = {
@@ -182,7 +184,13 @@ def run_real_suite(root: Path = ROOT, edition: str = "evening_premarket_watch", 
     cases: list[dict[str, Any]] = []
     for index, fault in enumerate(("none", *FAULT_ORDER), 0):
         run_id = baseline_id if index == 0 else f"market_{base[:-2]}{index:02d}"
-        env = os.environ.copy()
+        env = build_subprocess_env(
+            allowed_keys=["PATH", "HOME", "LANG", "LC_ALL", "PYTHONPATH", "VIRTUAL_ENV", "MARKET_TEXT_ONLY"],
+            secret_names=[],
+            consumer="subprocess",
+            purpose="child_process",
+            run_id=run_id,
+        )
         env.update({"SELF_HEALING_CANARY_MODE": "true", "SELF_HEALING_FAULT": fault, "DRY_RUN": "true", "CANARY_REAL_SEND": "false"})
         command = [sys.executable, "main.py", "--edition", edition, "--canary-run", "--run-id", run_id]
         if raw_response_file:

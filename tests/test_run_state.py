@@ -35,6 +35,34 @@ class RunStateTests(unittest.TestCase):
             restored = run_state.load(state["run_id"], root / "runtime")
             self.assertEqual(run_state.first_resume_step(restored), "final_validation")
 
+    def test_invalid_artifact_reset_clears_downstream_successes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runtime = root / "runtime"
+            output = root / "outputs"
+            output.mkdir(parents=True)
+            state = run_state.create("market_20260719_1804", "morning_close_review", runtime, output)
+            quote = output / "market_quotes.json"
+            content = output / "market_content.json"
+            quote.write_text("quote-v1", encoding="utf-8")
+            content.write_text("content-v1", encoding="utf-8")
+            run_state.mark(state, "collect_market_quotes", "success", runtime, artifacts=[quote])
+            run_state.mark(state, "generate_content", "success", runtime, artifacts=[content])
+            quote.write_text("tampered", encoding="utf-8")
+            restored = run_state.load(state["run_id"], runtime)
+            resume_step = run_state.first_resume_step(restored)
+            run_state.reset_from(restored, resume_step, runtime)
+            self.assertEqual(restored["steps"]["collect_market_quotes"]["status"], "pending")
+            self.assertEqual(restored["steps"]["generate_content"]["status"], "pending")
+
+    def test_same_run_lock_is_exclusive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "runtime"
+            with run_state.run_lock("market_20260719_1805", root):
+                with self.assertRaises(RuntimeError):
+                    with run_state.run_lock("market_20260719_1805", root):
+                        pass
+
     def test_unknown_step_is_rejected_and_delivery_stays_false(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

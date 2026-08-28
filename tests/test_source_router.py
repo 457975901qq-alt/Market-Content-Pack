@@ -76,6 +76,19 @@ class SourceRouterTests(unittest.TestCase):
             status = json.loads((Path(temp) / "source_status.json").read_text(encoding="utf-8"))
             assert status["data_cutoff"] == context.scheduled_cutoff.isoformat()
 
+    def test_material_before_edition_window_is_excluded(self):
+        context = resolve_edition_context("morning_close_review")
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(source_router, "_rss", return_value=[
+                {"title": "inside window", "url": "https://example.test/current", "summary": "ok", "published_at": (context.source_window_start + dt.timedelta(minutes=1)).isoformat()},
+                {"title": "outside window", "url": "https://example.test/old", "summary": "old", "published_at": (context.source_window_start - dt.timedelta(minutes=1)).isoformat()},
+            ]), patch.dict(source_router.os.environ, {"RSS_FEEDS": "https://example.test/feed", "SOURCE_ROUTER_LIVE": "false"}, clear=False):
+                result = source_router.collect(Path(temp), edition="morning_close_review")
+            assert result["source_count"] == 1
+            assert result["stale_items_discarded"] == 1
+            status = json.loads((Path(temp) / "source_status.json").read_text(encoding="utf-8"))
+            assert status["source_window_start"] == context.source_window_start.isoformat()
+
     def test_shared_github_cache_requires_explicit_opt_in(self):
         context = resolve_edition_context("morning_close_review")
         with tempfile.TemporaryDirectory() as temp:
@@ -86,6 +99,22 @@ class SourceRouterTests(unittest.TestCase):
                 assert source_router._github_cache_is_current(cache, current_run_root, context.scheduled_cutoff) is False
             with patch.dict(source_router.os.environ, {"GITHUB_SHARED_CACHE_ENABLED": "true", "GITHUB_CACHE_MAX_AGE_HOURS": "6"}, clear=False):
                 assert source_router._github_cache_is_current(cache, current_run_root, context.scheduled_cutoff) is True
+
+    def test_selected_routes_are_recorded_and_unselected_routes_are_not_run(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(source_router, "_rss", return_value=[{"title": "selected", "url": "https://example.test/selected", "summary": "ok"}]), patch.dict(
+                source_router.os.environ,
+                {"RSS_FEEDS": "https://example.test/feed", "SOURCE_ROUTER_LIVE": "false"},
+                clear=False,
+            ):
+                source_router.collect(Path(temp), edition="morning_close_review", sources=["rss"])
+            status = json.loads((Path(temp) / "source_status.json").read_text(encoding="utf-8"))
+            self.assertEqual(status["selected_sources"], ["rss"])
+            self.assertEqual(status["sources"]["rss"]["status"], "healthy")
+            self.assertEqual(status["sources"]["x"]["status"], "not_selected")
+            self.assertEqual(status["sources"]["exa"]["status"], "not_selected")
+            self.assertEqual(status["sources"]["jina"]["status"], "not_selected")
+            self.assertEqual(status["sources"]["github"]["status"], "not_selected")
 
 
 if __name__ == "__main__":

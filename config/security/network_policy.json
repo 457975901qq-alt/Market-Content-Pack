@@ -1,0 +1,22 @@
+{
+  "allowed_hosts": [
+    "generativelanguage.googleapis.com",
+    "api.openai.com",
+    "api.github.com",
+    "api.exa.ai",
+    "api.massive.com",
+    "r.jina.ai",
+    "stooq.com",
+    "query1.finance.yahoo.com",
+    "www.google.com",
+    "finance.yahoo.com",
+    "feeds.marketwatch.com",
+    "www.federalreserve.gov",
+    "blogs.nvidia.com",
+    "openai.com",
+    "www.cnbc.com",
+    "www.theverge.com",
+    "example.test"
+  ],
+  "localhost_exceptions": ["127.0.0.1:11434", "localhost:11434"]
+}

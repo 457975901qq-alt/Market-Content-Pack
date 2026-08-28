@@ -2,15 +2,26 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - the project runs on macOS/Linux
+    fcntl = None
 
 from models.runtime_models import RuntimeState
+from security import assert_safe_persistence
 
 
-RUN_ID_RE = re.compile(r"^market_\d{8}_\d{4}$")
+RUN_ID_RE = re.compile(r"^market_\d{8}_\d{4}(?:_[a-z0-9]{4,8})?$")
+TOKYO = ZoneInfo("Asia/Tokyo")
 STEPS = ["health_check", "collect_github", "collect_sources", "collect_market_quotes", "generate_content", "final_validation", "build_review_package", "reviewer_agent", "reviewer_gate", "offline_evaluation", "archive"]
 STATUSES = {"pending", "running", "success", "failed", "skipped"}
 LOGICAL_STEP_TO_EXECUTOR = {
@@ -29,7 +40,7 @@ LOGICAL_STEP_TO_EXECUTOR = {
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(TOKYO).isoformat()
 
 
 def sha256(path: Path) -> str:
@@ -40,16 +51,50 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+def atomic_write_json(path: Path, payload: Any) -> None:
+    assert_safe_persistence(payload, path=path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        if path.parent.name in {"runtime", "state", "logs"} or "checkpoint" in path.name.lower():
+            os.chmod(path, 0o600)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+@contextmanager
+def run_lock(run_id: str, root: Path):
+    """Serialize all writers for one run without changing artifact layout."""
+    lock_path = root / f"{run_id}.lock" if root.name == "canary" else root / "locks" / f"{run_id}.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        if fcntl is not None:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise RuntimeError(f"run_locked:{run_id}") from exc
+        yield handle
+    finally:
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
 
 
 def create(run_id: str, edition: str, root: Path, output_root: Path) -> dict[str, Any]:
     if not RUN_ID_RE.fullmatch(run_id):
-        raise ValueError("run_id must match market_YYYYMMDD_HHMM")
+        raise ValueError("run_id must match market_YYYYMMDD_HHMM[_short_id]")
     timestamp = now()
     state = {
         "run_id": run_id,
@@ -105,9 +150,10 @@ def save(state: dict[str, Any], root: Path) -> None:
         from runtime_index import index_for_state_root
 
         index_for_state_root(root).upsert_run(state, path(state["run_id"], root))
-    except Exception:
-        # SQLite is an index/audit layer; JSON state remains authoritative.
-        pass
+    except Exception as exc:
+        # SQLite is an index/audit layer; JSON state remains authoritative, but
+        # index drift must remain visible for operations and repair tooling.
+        _log_index_error(root, state["run_id"], "upsert_run", exc)
 
 
 def mark(state: dict[str, Any], step: str, status: str, root: Path, error: dict[str, Any] | None = None, artifacts: list[Path] | None = None) -> None:
@@ -129,24 +175,52 @@ def mark(state: dict[str, Any], step: str, status: str, root: Path, error: dict[
         state["failed_step"] = None
     if status == "failed":
         state["failed_step"] = step
-    logical_steps = state.setdefault("logical_steps", {})
-    for logical, executor_step in LOGICAL_STEP_TO_EXECUTOR.items():
-        if executor_step == step:
-            logical_steps[logical] = {
-                "step": logical,
-                "status": status,
-                "started_at": item.get("started_at"),
-                "completed_at": item.get("completed_at"),
-                "error": error,
-                "artifacts": item.get("artifacts", []),
-            }
     save(state, root)
     try:
         from runtime_index import index_for_state_root
 
         index_for_state_root(root).record_step(state["run_id"], step, status, error, len(item["artifacts"]))
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_index_error(root, state["run_id"], "record_step", exc)
+
+
+def _log_index_error(root: Path, run_id: str, operation: str, exc: BaseException) -> None:
+    target = root / "runtime_index_errors.jsonl"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({
+            "run_id": run_id,
+            "operation": operation,
+            "error_type": type(exc).__name__,
+            "message": str(exc)[:500],
+            "timestamp": now(),
+        }, ensure_ascii=False) + "\n")
+
+
+def mark_logical(
+    state: dict[str, Any],
+    step: str,
+    status: str,
+    root: Path,
+    error: dict[str, Any] | None = None,
+    artifacts: list[Path] | None = None,
+) -> None:
+    """Update a planner step without pretending its executor is the same step.
+
+    Several logical calls intentionally share one legacy executor artifact.
+    Keeping their status separate makes plans and recovery evidence truthful.
+    """
+    if step not in LOGICAL_STEP_TO_EXECUTOR or status not in STATUSES:
+        raise ValueError(f"invalid_logical_step_or_status:{step}:{status}")
+    item = state.setdefault("logical_steps", {}).setdefault(step, _pending(step))
+    timestamp = now()
+    item.update({"step": step, "status": status, "error": error})
+    if status == "running":
+        item["started_at"] = timestamp
+    if status in {"success", "failed", "skipped"}:
+        item["completed_at"] = timestamp
+    item["artifacts"] = [artifact_record(p, state["run_id"]) for p in (artifacts or []) if p.exists() and p.is_file()]
+    save(state, root)
 
 
 def artifact_record(path: Path, run_id: str) -> dict[str, Any]:

@@ -30,7 +30,7 @@ class RuntimeState(BaseModel):
     # Extra fields keep old state files readable while the core fields are typed.
     model_config = ConfigDict(extra="allow")
 
-    run_id: str = Field(pattern=r"^market_\d{8}_\d{4}$")
+    run_id: str = Field(pattern=r"^market_\d{8}_\d{4}(?:_[a-z0-9]{4,8})?$")
     edition: str = Field(min_length=1)
     current_step: str | None = None
     completed_steps: list[str] = Field(default_factory=list)

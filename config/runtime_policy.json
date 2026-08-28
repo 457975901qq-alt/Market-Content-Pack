@@ -1,0 +1,19 @@
+{
+  "step_timeout_seconds": 600,
+  "allow_image_generation": false,
+  "source_fallback_enabled": true,
+  "monitoring": {
+    "pipeline_timeout_seconds": 600,
+    "model_timeout_seconds": 120,
+    "minimum_source_count": 10,
+    "max_stage_retries": 3,
+    "qa_failure_rate_threshold": 0.2,
+    "consecutive_failure_threshold": 2
+  },
+  "required_environment_by_provider": {
+    "ollama": [],
+    "gemini": ["GEMINI_API_KEY"],
+    "openai": ["OPENAI_API_KEY"],
+    "rule_template": []
+  }
+}

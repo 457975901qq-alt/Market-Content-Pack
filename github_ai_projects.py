@@ -17,6 +17,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from security import get_secret, validate_url
+
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = Path(os.environ.get("GITHUB_OUTPUT_DIR", str(ROOT / "outputs" / "github_ai_projects"))).expanduser().resolve()
@@ -38,6 +40,7 @@ def log_error(message: str, exc: BaseException | None = None) -> None:
 
 
 def github_request(keyword: str, token: str) -> dict[str, Any]:
+    validate_url(API_URL, consumer="source_collector", purpose="collect_sources")
     query = f'{keyword} in:name,description,topics archived:false'
     params = urllib.parse.urlencode(
         {
@@ -144,7 +147,7 @@ def write_outputs(repos: list[dict[str, Any]], output_dir: Path) -> tuple[Path, 
     selected = repos[:FINAL_LIMIT]
     payload = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "source": "GitHub REST API search repositories" if os.environ.get("GITHUB_TOKEN", "").strip() else "GitHub CLI gh api search/repositories",
+        "source": "GitHub search repositories (REST API or authenticated gh CLI)",
         "keywords": KEYWORDS,
         "per_keyword": PER_KEYWORD,
         "selected_count": len(selected),
@@ -188,7 +191,8 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     args = parser.parse_args()
 
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    secret = get_secret("GITHUB_TOKEN", consumer="source_collector", purpose="collect_sources", run_id="github-source")
+    token = secret.reveal("collect_sources") if secret else ""
     if not token and shutil.which("gh") is None:
         msg = "GITHUB_TOKEN is not set and gh CLI is unavailable; GitHub source is blocked."
         log_error(msg)

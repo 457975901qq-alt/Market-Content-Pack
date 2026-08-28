@@ -2,7 +2,7 @@ import datetime as dt
 import unittest
 
 from edition_profiles import resolve_edition_context
-from market_content_openai import INVESTMENT_DISCLAIMER, MarketContentError, _normalize_run_metadata, build_prompt, validate_market_content
+from market_content_openai import DAILY_SECTION_DEFINITIONS, INVESTMENT_DISCLAIMER, MarketContentError, _normalize_run_metadata, build_prompt, validate_market_content
 
 
 TOKYO = dt.timezone(dt.timedelta(hours=9))
@@ -28,7 +28,6 @@ def valid_payload(context):
         "earnings": [],
         "risk_factors": [],
         "analysis_text": {"title": "测试标题", "subtitle": "测试副标题", "sections": [{"heading": "测试", "content": "测试内容"}]},
-        "douyin": {"title": "测试标题", "cover_title": "测试封面", "caption": "测试文案", "hashtags": ["#测试"]},
     }
 
 
@@ -41,6 +40,7 @@ class MarketContentEditionTests(unittest.TestCase):
         context = resolve_edition_context("morning_close_review", self.morning_started)
         payload = valid_payload(context)
         validate_market_content(payload, context=context)
+        self.assertEqual([item["section_id"] for item in payload["daily_sections"]], [item[0] for item in DAILY_SECTION_DEFINITIONS])
         self.assertEqual(payload["market_session"], "close_review")
         self.assertEqual(set(payload["edition_fields"]), set(context.version_fields))
 
@@ -134,6 +134,14 @@ class MarketContentEditionTests(unittest.TestCase):
         with self.assertRaises(MarketContentError) as raised:
             validate_market_content(payload, context=context)
         self.assertEqual(raised.exception.failure_position, "ai_investment_view.disclaimer")
+
+    def test_daily_sections_reject_unknown_section(self):
+        context = resolve_edition_context("morning_close_review", self.morning_started)
+        payload = valid_payload(context)
+        payload["daily_sections"] = [{"section_id": "unknown", "title": "未知", "status": "available", "content": "不应通过", "evidence": []}]
+        with self.assertRaises(MarketContentError) as raised:
+            validate_market_content(payload, context=context)
+        self.assertEqual(raised.exception.error_type, "daily_sections_invalid")
 
 
 if __name__ == "__main__":

@@ -9,7 +9,6 @@ from typing import Any
 
 def validate_text_artifacts(
     content_path: Path,
-    platform_copy_path: Path,
     *,
     expected_edition: str | None = None,
 ) -> dict[str, Any]:
@@ -24,8 +23,6 @@ def validate_text_artifacts(
 
     content_exists = content_path.exists() and content_path.is_file() and content_path.stat().st_size > 0
     check("content_file", content_exists, "non-empty JSON file", content_exists, content_path)
-    copy_exists = platform_copy_path.exists() and platform_copy_path.is_file() and platform_copy_path.stat().st_size > 0
-    check("platform_copy_file", copy_exists, "non-empty text file", copy_exists, platform_copy_path)
 
     content: dict[str, Any] = {}
     if content_exists:

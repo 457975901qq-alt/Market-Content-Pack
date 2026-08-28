@@ -24,6 +24,7 @@ class FunctionError(BaseModel):
     message: str = Field(min_length=1)
     retryable: bool = False
     remediation_step: str | None = None
+    traceback: str | None = None
 
 
 class FunctionCall(BaseModel):

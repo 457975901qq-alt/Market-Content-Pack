@@ -1,9 +1,31 @@
 {
   "primary_provider": "yahoo_chart",
-  "secondary_provider": "google_finance",
+  "secondary_provider": "massive",
+  "available_secondary_providers": ["massive"],
   "require_crosscheck": true,
   "conflict_threshold": 0.02,
   "max_staleness_hours": 120,
-  "required_symbols": ["SPX", "NDX", "DJI"],
-  "max_workers": 4
+  "required_symbols": ["VOO", "QQQM"],
+  "instrument_universe": "etf_proxy",
+  "instrument_mapping": {
+    "VOO": {"replaces": "SPX", "role": "s&p_500_exposure_proxy", "asset_type": "etf"},
+    "QQQM": {"replaces": "NDX", "role": "nasdaq_100_exposure_proxy", "asset_type": "etf"}
+  },
+  "max_workers": 4,
+  "provider_capabilities": {
+    "massive": {
+      "role": "historical_secondary",
+      "supports": {
+        "ndx_historical_daily": true,
+        "spx_historical": false,
+        "dji_historical": false,
+        "ndx_realtime_primary": false,
+        "vix": false,
+        "vxn": false
+      },
+      "symbol_mapping": {"NDX": "I:NDX"},
+      "minimum_history_trading_days": 90,
+      "delayed_allowed_for_historical": true
+    }
+  }
 }

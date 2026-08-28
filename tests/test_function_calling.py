@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from function_calling.function_executor import FunctionExecutor
+from function_calling.arguments import GetMarketQuoteArgs
 from function_calling.registry import build_registry
 from function_calling.tool_call import FunctionCall, FunctionStatus
 
@@ -57,3 +60,12 @@ def test_unknown_publish_function_and_unknown_step_are_rejected() -> None:
     assert delivery.error and delivery.error.error_code == "unknown_tool"
     assert unknown_step.status is FunctionStatus.rejected
     assert unknown_step.error and unknown_step.error.error_code == "step_not_allowed"
+
+
+def test_market_quote_schema_accepts_symbol_alias_and_requires_timezone_for_as_of() -> None:
+    parsed = GetMarketQuoteArgs.model_validate({**base(), "ticker": "SPX", "as_of": "2026-08-20T17:30:00+09:00"})
+    assert parsed.symbol == "SPX"
+    assert parsed.as_of is not None
+    assert parsed.model_dump(mode="json")["as_of"] == "2026-08-20T08:30:00Z"
+    with pytest.raises(ValueError):
+        GetMarketQuoteArgs.model_validate({**base(), "symbol": "SPX", "as_of": "2026-08-20T17:30:00"})

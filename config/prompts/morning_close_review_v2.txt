@@ -9,6 +9,7 @@
 6. 增加 `ai_investment_view`：先判断市场环境为 risk_on、risk_off、mixed 或 insufficient_data，再输出基于已验证证据的非个性化情景分析。允许的 stance 为“偏积极观察/中性观察/偏谨慎/数据不足”，允许的 action 为“观察/等待验证/控制风险/数据不足”。
 7. 必须包含 evidence、risks、invalidation_conditions 和最多三条 suggestions。suggestions 只能是观察、等待验证、风险管理或分散化框架，不得输出买入、卖出、加仓、减仓、做多、做空、目标价或止损价。
 8. disclaimer 固定为“仅作信息整理与情景分析，不构成个性化投资建议。”
+9. 必须输出 daily_sections，完整覆盖：今日Top 3市场催化剂、AI与半导体、大科技、美国宏观、全球央行、地缘政治与政策、指数调整、ETF调仓与资金流、OPEX与衍生品、美债与流动性、原油与大宗商品、IPO与融资、突发新闻、GitHub热门AI项目、对重点资产的影响。每项包含 section_id、固定 title、status、content、evidence；没有可靠来源时 status=unavailable，content 写“数据暂缺”，不得猜测。
 
 输出 JSON 外壳必须包含程序 schema 要求的共享字段；将以下三项放入 `edition_fields`，且不得出现晚盘字段：
 `previous_session_summary`、`asia_open_risk`、`close_review_focus`。

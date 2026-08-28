@@ -12,7 +12,11 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
+
+from configuration import configuration_report
+from security import get_secret, validate_url
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
@@ -39,10 +43,10 @@ def setting(name: str, default: str = "") -> str:
     return os.environ.get(name, _env_file().get(name, default)).strip()
 
 
-def _request(url: str, timeout: float = 5.0) -> dict[str, Any]:
+def _request(url: str, timeout: float = 5.0, headers: dict[str, str] | None = None) -> dict[str, Any]:
     started = time.monotonic()
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "market-content-healthcheck/1.0"})
+        request = urllib.request.Request(url, headers={"User-Agent": "market-content-healthcheck/1.0", **(headers or {})})
         with urllib.request.urlopen(request, timeout=timeout) as response:
             response.read(256)
             return {"status": "healthy", "http_status": response.status, "latency_ms": int((time.monotonic() - started) * 1000)}
@@ -80,12 +84,40 @@ def check_ollama() -> dict[str, Any]:
 
 def check_gemini() -> dict[str, Any]:
     model = setting("GEMINI_MODEL", "gemini-3.5-flash")
-    key = setting("GEMINI_API_KEY")
-    if not key:
+    secret = get_secret("GEMINI_API_KEY", consumer="healthcheck", purpose="healthcheck", run_id="healthcheck")
+    if secret is None:
         return {"service": "gemini", "status": "unavailable", "model": model, "credential_configured": False, "blocking_reason": "GEMINI_API_KEY_missing"}
-    # The key is used only in the request URL and is never returned or logged.
-    result = _request(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
+    validate_url("https://generativelanguage.googleapis.com/v1beta/models", consumer="healthcheck", purpose="healthcheck")
+    result = _request("https://generativelanguage.googleapis.com/v1beta/models", headers={"x-goog-api-key": secret.reveal("healthcheck")})
     result.update({"service": "gemini", "model": model, "credential_configured": True})
+    return result
+
+
+def check_massive() -> dict[str, Any]:
+    base_url = (setting("MASSIVE_BASE_URL", "https://api.massive.com")).rstrip("/")
+    result: dict[str, Any] = {"service": "massive", "provider": "massive_indices", "base_url": base_url, "status": "disabled", "credential_configured": False}
+    try:
+        secret = get_secret("MASSIVE_API_KEY", consumer="healthcheck", purpose="healthcheck", run_id="healthcheck")
+    except Exception:
+        result["blocking_reason"] = "MASSIVE_NOT_CONFIGURED"
+        return result
+    if secret is None:
+        result["blocking_reason"] = "MASSIVE_API_KEY_missing"
+        return result
+    result["credential_configured"] = True
+    # Massive is intentionally a narrow NDX historical secondary.  Do not
+    # turn unsupported SPX/DJI capabilities into a provider-wide health fail.
+    symbols = {"NDX": "I:NDX"}
+    checks: dict[str, Any] = {}
+    for symbol, ticker in symbols.items():
+        url = f"{base_url}/v3/reference/tickers/{ticker.replace(':', '%3A')}"
+        checks[symbol] = _request(url, headers={"Authorization": f"Bearer {secret.reveal('healthcheck')}"})
+    result["symbol_checks"] = checks
+    failures = [symbol for symbol, item in checks.items() if item.get("status") != "healthy"]
+    result["status"] = "healthy" if not failures else "unhealthy"
+    result["unsupported_capabilities"] = ["SPX", "DJI", "NDX realtime primary"]
+    if failures:
+        result["blocking_reason"] = "symbol_reference_unavailable:" + ",".join(failures)
     return result
 
 
@@ -115,13 +147,34 @@ def check_phoenix() -> dict[str, Any]:
     url = configured or "http://127.0.0.1:6006"
     if "phoenix:" in url:
         url = "http://127.0.0.1:6006"
+    else:
+        # PHOENIX_COLLECTOR_ENDPOINT is normally OTLP gRPC on 4317, while
+        # this health check must speak HTTP to the Phoenix UI/API port.
+        try:
+            parsed = urlsplit(url)
+            if parsed.port == 4317:
+                host = parsed.hostname or "127.0.0.1"
+                netloc = f"{host}:6006"
+                url = urlunsplit((parsed.scheme or "http", netloc, "", "", ""))
+            elif parsed.path == "/v1/traces":
+                url = urlunsplit((parsed.scheme or "http", parsed.netloc, "", "", ""))
+        except ValueError:
+            pass
     result = _request(url)
     result.update({"service": "phoenix", "url": url, "configured_endpoint": configured or None})
     return result
 
 
-def record_task_event(status: str, started: float, edition: str = "", started_epoch: float | None = None) -> None:
-    LOGS.mkdir(parents=True, exist_ok=True)
+def record_task_event(
+    status: str,
+    started: float,
+    edition: str = "",
+    started_epoch: float | None = None,
+    *,
+    log_path: Path | None = None,
+) -> None:
+    log_path = log_path or TASK_LOG
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "status": status,
         "edition": edition,
@@ -129,14 +182,16 @@ def record_task_event(status: str, started: float, edition: str = "", started_ep
         "finished_at": datetime.now(timezone.utc).isoformat(),
         "duration_seconds": round(time.monotonic() - started, 3),
     }
-    with TASK_LOG.open("a", encoding="utf-8") as handle:
+    with log_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
-def _task_metrics() -> dict[str, Any]:
+def _task_metrics(*, task_log: Path | None = None, logs_root: Path | None = None) -> dict[str, Any]:
+    task_log = task_log or TASK_LOG
+    logs_root = logs_root or LOGS
     events: list[dict[str, Any]] = []
-    if TASK_LOG.exists():
-        for line in TASK_LOG.read_text(encoding="utf-8").splitlines():
+    if task_log.exists():
+        for line in task_log.read_text(encoding="utf-8").splitlines():
             try:
                 item = json.loads(line)
                 if isinstance(item, dict):
@@ -159,8 +214,8 @@ def _task_metrics() -> dict[str, Any]:
     durations = [float(item["duration_seconds"]) for item in completed if isinstance(item.get("duration_seconds"), (int, float))]
     fallback_count = 0
     structured_event_count = 0
-    if LOGS.exists():
-        for path in LOGS.rglob("*.jsonl"):
+    if logs_root.exists():
+        for path in logs_root.rglob("*.jsonl"):
             try:
                 lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
             except OSError:
@@ -190,16 +245,16 @@ def _task_metrics() -> dict[str, Any]:
         "fallback_count": fallback_count,
         "structured_event_count": structured_event_count,
         "average_runtime_seconds": round(sum(durations) / len(durations), 3) if durations else None,
-        "metrics_source": str(TASK_LOG),
+        "metrics_source": str(task_log),
     }
 
 
-def collect_report() -> dict[str, Any]:
+def collect_report(*, task_log: Path | None = None, logs_root: Path | None = None) -> dict[str, Any]:
     return {
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "project_root": str(ROOT),
-        "services": {"ollama": check_ollama(), "gemini": check_gemini(), "docker": check_docker(), "phoenix": check_phoenix()},
-        "metrics": _task_metrics(),
+        "services": {"ollama": check_ollama(), "gemini": check_gemini(), "massive": check_massive(), "docker": check_docker(), "phoenix": check_phoenix(), "configuration": configuration_report()},
+        "metrics": _task_metrics(task_log=task_log, logs_root=logs_root),
         "output": {"mode": "text", "external_publish": "removed"},
         "sensitive_values_logged": False,
     }
@@ -224,6 +279,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Gemini：**{service_status('gemini')}**，模型：`{services['gemini'].get('model') or '未配置'}`",
         f"- Docker：**{service_status('docker')}**，{services['docker'].get('docker_version') or '版本不可读'}",
         f"- Phoenix：**{service_status('phoenix')}**，地址：`{services['phoenix'].get('url')}`", "",
+        f"- 配置：**{service_status('configuration')}**，Provider：`{services['configuration'].get('provider')}`",
         "## 今日任务指标", "",
         f"- 任务成功率：{_display(metrics.get('task_success_rate'))}",
         f"- 已完成任务数：{metrics.get('completed_task_count', 0)}",
@@ -235,11 +291,18 @@ def render_markdown(report: dict[str, Any]) -> str:
     ])
 
 
-def write_report(report: dict[str, Any] | None = None) -> Path:
-    report = report or collect_report()
-    REPORTS.mkdir(parents=True, exist_ok=True)
-    (REPORTS / "system_health.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    path = REPORTS / "system_health.md"
+def write_report(
+    report: dict[str, Any] | None = None,
+    *,
+    report_root: Path | None = None,
+    task_log: Path | None = None,
+    logs_root: Path | None = None,
+) -> Path:
+    report_root = report_root or REPORTS
+    report = report or collect_report(task_log=task_log, logs_root=logs_root)
+    report_root.mkdir(parents=True, exist_ok=True)
+    (report_root / "system_health.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path = report_root / "system_health.md"
     path.write_text(render_markdown(report), encoding="utf-8")
     return path
 

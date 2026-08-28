@@ -30,6 +30,11 @@
     "deterministic_review_package": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
     "reviewer_agent": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
     "reviewer_gate": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "deterministic"},
+    "image_renderer": {"enabled": true, "priority": 100, "supported_tasks": ["image_generation"], "quality_level": "deterministic"},
+    "image_qa": {"enabled": true, "priority": 100, "supported_tasks": ["image_qa"], "quality_level": "deterministic"},
+    "webhook_publish": {"enabled": false, "priority": 100, "supported_tasks": ["delivery"], "quality_level": "external"},
+    "smtp_email_publish": {"enabled": false, "priority": 100, "supported_tasks": ["delivery"], "quality_level": "external"},
+    "x_twitter_publish": {"enabled": false, "priority": 100, "supported_tasks": ["delivery"], "quality_level": "external"},
     "blocked_delivery_gate": {"enabled": true, "priority": 100, "supported_tasks": ["pipeline_step"], "quality_level": "blocked"}
   }
 }

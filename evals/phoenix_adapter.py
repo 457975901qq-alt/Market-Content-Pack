@@ -13,6 +13,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from security import validate_url
+
 
 def _enabled() -> bool:
     return os.environ.get("PHOENIX_EVAL_ENABLED", "false").lower() == "true"
@@ -23,6 +25,7 @@ def _base_url() -> str:
 
 
 def _request(method: str, path: str, payload: dict[str, Any] | None = None, timeout: float = 5.0) -> dict[str, Any]:
+    validate_url(f"{_base_url()}{path}", consumer="observability", purpose="phoenix_export", allow_localhost=True)
     data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = Request(
         f"{_base_url()}{path}",

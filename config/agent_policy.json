@@ -1,0 +1,30 @@
+{
+  "enabled": true,
+  "mode": "controlled_agent",
+  "max_iterations": 30,
+  "max_tool_calls": 30,
+  "max_runtime_seconds": 1200,
+  "max_replans": 8,
+  "max_stagnant_iterations": 2,
+  "allow_dynamic_step_order": true,
+  "allow_skip_optional_steps": true,
+  "mandatory_gates": [
+    "validate_market_data",
+    "validate_content_consistency",
+    "final_quality_gate",
+    "reviewer_gate"
+  ],
+  "blocked_tools": [
+    "deliver",
+    "canary_deliver",
+    "shell",
+    "exec_shell"
+  ],
+  "human_approval_required_for": [
+    "production_update",
+    "external_delivery",
+    "schema_change",
+    "code_change"
+  ],
+  "stop_on_unknown_failure": true
+}

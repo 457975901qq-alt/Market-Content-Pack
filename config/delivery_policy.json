@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "global_delivery_kill_switch": true,
+  "external_delivery_enabled": false,
+  "target_whitelist": [],
+  "approval_ttl_seconds": 3600,
+  "adapter": "x_twitter",
+  "required_env": [],
+  "approval_required": true,
+  "dry_run_default": true,
+  "timeout_seconds": 20
+}

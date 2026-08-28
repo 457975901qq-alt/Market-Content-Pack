@@ -1,0 +1,10 @@
+{
+  "migration_policy_version": 1,
+  "database_version": "scheduler_sqlite_v1",
+  "migrations": [],
+  "production_policy": {
+    "destructive_requires_explicit_approval": true,
+    "rollback_requires_compatible_target": true,
+    "external_delivery_during_drill": false
+  }
+}

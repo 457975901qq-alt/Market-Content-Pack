@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from edition_profiles import resolve_edition_context
+from security import get_secret, validate_url
 
 
 ROOT = Path(__file__).resolve().parent
@@ -79,6 +80,7 @@ def _material(source_type: str, item: dict[str, Any]) -> dict[str, Any]:
 
 def _rss(url: str) -> list[dict[str, Any]]:
     limit = int(os.environ.get("RSS_ITEMS_PER_FEED", "8"))
+    validate_url(url, consumer="source_collector", purpose="collect_sources")
     request = urllib.request.Request(url, headers={"User-Agent": "daily-market-content-pack/1.0"})
     with urllib.request.urlopen(request, timeout=20) as response:
         root = ET.fromstring(response.read())
@@ -124,7 +126,7 @@ def _agent_reach_doctor() -> dict[str, Any]:
     try:
         payload = json.loads(_command_text(["agent-reach", "doctor", "--json"], timeout=20))
         return payload if isinstance(payload, dict) else {}
-    except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError, subprocess.TimeoutExpired):
         return {}
 
 
@@ -186,7 +188,11 @@ def _parse_timestamp(value: Any) -> dt.datetime | None:
     return parsed.replace(tzinfo=dt.timezone.utc) if parsed.tzinfo is None else parsed.astimezone(dt.timezone.utc)
 
 
-def _filter_to_cutoff(materials: list[dict[str, Any]], cutoff: dt.datetime) -> tuple[list[dict[str, Any]], int, int]:
+def _filter_to_cutoff(
+    materials: list[dict[str, Any]],
+    cutoff: dt.datetime,
+    window_start: dt.datetime | None = None,
+) -> tuple[list[dict[str, Any]], int, int, int]:
     """Keep source items at or before the edition cutoff.
 
     Missing timestamps are retained for traceability but counted explicitly;
@@ -195,17 +201,21 @@ def _filter_to_cutoff(materials: list[dict[str, Any]], cutoff: dt.datetime) -> t
     kept: list[dict[str, Any]] = []
     future_count = 0
     missing_count = 0
+    stale_count = 0
     cutoff_utc = cutoff.astimezone(dt.timezone.utc)
+    start_utc = window_start.astimezone(dt.timezone.utc) if window_start else None
     for item in materials:
         timestamp = _parse_timestamp(item.get("published_at"))
         if timestamp is None:
             missing_count += 1
             kept.append(item)
-        elif timestamp <= cutoff_utc:
+        elif timestamp <= cutoff_utc and (start_utc is None or timestamp >= start_utc):
             kept.append(item)
+        elif timestamp < (start_utc or cutoff_utc):
+            stale_count += 1
         else:
             future_count += 1
-    return kept, future_count, missing_count
+    return kept, future_count, missing_count, stale_count
 
 
 def _github_cache_is_current(artifact: Path, current_run_root: Path, cutoff: dt.datetime) -> bool:
@@ -247,11 +257,12 @@ def _github_projects(output_dir: Path, cutoff: dt.datetime) -> tuple[list[dict[s
 
         from github_ai_projects import fetch_repositories, write_outputs
 
-        projects = fetch_repositories(os.environ.get("GITHUB_TOKEN", "").strip())
+        github_secret = get_secret("GITHUB_TOKEN", consumer="source_collector", purpose="collect_sources", run_id="source-router")
+        projects = fetch_repositories(github_secret.reveal("collect_sources") if github_secret else "")
         github_dir = output_dir / "github_ai_projects"
         write_outputs(projects, github_dir)
         selected = projects[:3]
-        return selected, {"status": "healthy" if selected else "partial", "backend": "gh CLI" if not os.environ.get("GITHUB_TOKEN", "").strip() else "GitHub REST API", "count": len(selected), "cache_hit": False}
+        return selected, {"status": "healthy" if selected else "partial", "backend": "gh CLI" if github_secret is None else "GitHub REST API", "count": len(selected), "cache_hit": False}
     except Exception as exc:  # route failure is recorded, never fabricated
         return [], {"status": "failed", "error_type": type(exc).__name__, "message": str(exc)[:300]}
 
@@ -275,7 +286,7 @@ def _dedupe(materials: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list
     return accepted, filtered
 
 
-def collect(output_dir: Path, edition: str | None = None) -> dict[str, Any]:
+def collect(output_dir: Path, edition: str | None = None, sources: list[str] | None = None) -> dict[str, Any]:
     if os.environ.get("SELF_HEALING_CANARY_MODE", "false").lower() == "true":
         fault = os.environ.get("SELF_HEALING_FAULT", "none").strip()
         if fault in {"collector_timeout", "collector_http_503"} and fault not in _CANARY_FAULTS_INJECTED:
@@ -285,6 +296,7 @@ def collect(output_dir: Path, edition: str | None = None) -> dict[str, Any]:
     materials: list[dict[str, Any]] = []
     edition_context = resolve_edition_context(edition) if edition else None
     cutoff = edition_context.scheduled_cutoff if edition_context else dt.datetime.now(dt.timezone.utc)
+    window_start = edition_context.source_window_start if edition_context else None
     doctor = _agent_reach_doctor()
     route_backend = {
         "x": (doctor.get("twitter") or {}).get("active_backend"),
@@ -294,8 +306,18 @@ def collect(output_dir: Path, edition: str | None = None) -> dict[str, Any]:
         "rss": (doctor.get("rss") or {}).get("active_backend"),
     }
     live = os.environ.get("SOURCE_ROUTER_LIVE", "true").lower() == "true"
+    selected_sources = {
+        str(item).strip().lower()
+        for item in (sources or ["rss", "x", "exa", "jina", "github"])
+        if str(item).strip()
+    }
+    use_rss = bool({"rss", "rss_summary"} & selected_sources)
+    use_x = "x" in selected_sources
+    use_exa = "exa" in selected_sources
+    use_jina = "jina" in selected_sources
+    use_github = "github" in selected_sources
     feeds = _rss_feeds()
-    if feeds:
+    if feeds and use_rss:
         def load_feed(feed: str) -> tuple[str, list[dict[str, Any]], Exception | None]:
             try:
                 return feed, _rss(feed), None
@@ -308,25 +330,46 @@ def collect(output_dir: Path, edition: str | None = None) -> dict[str, Any]:
         # while network waits happen concurrently.
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="market-source") as pool:
             loaded = list(pool.map(load_feed, feeds))
+        rss_item_count = 0
+        rss_failure_count = 0
         for feed, items, failure in loaded:
             if failure is not None:
+                rss_failure_count += 1
                 statuses[feed] = {"source_type": "rss", "status": "failed", "error_type": type(failure).__name__, "message": str(failure)[:300]}
                 continue
+            rss_item_count += len(items)
             for item in items:
                 materials.append(_material("rss", item))
             statuses[feed] = {"source_type": "rss", "status": "healthy", "backend": route_backend.get("rss") or "urllib", "item_count": len(items)}
+        statuses["rss"] = {
+            "source_type": "rss",
+            "status": "healthy" if rss_failure_count == 0 else ("partial" if rss_item_count else "failed"),
+            "backend": route_backend.get("rss") or "urllib",
+            "feed_count": len(feeds),
+            "failed_feed_count": rss_failure_count,
+            "item_count": rss_item_count,
+        }
     else:
-        statuses["rss"] = {"source_type": "rss", "status": "unavailable", "reason": "RSS_FEEDS_not_configured"}
+        statuses["rss"] = {
+            "source_type": "rss",
+            "status": "unavailable" if use_rss else "not_selected",
+            "reason": "RSS_FEEDS_not_configured" if use_rss else "route_not_selected",
+        }
 
-    if live:
+    live_loaders: list[tuple[str, Any]] = []
+    if use_x:
+        live_loaders.append(("x", lambda: _twitter_serenity(cutoff)))
+    if use_exa:
+        live_loaders.append(("exa", _exa_search))
+    if live and live_loaders:
         def load_live(source_type: str, loader: Any) -> tuple[str, list[dict[str, Any]], Exception | None]:
             try:
                 return source_type, loader(), None
             except Exception as exc:
                 return source_type, [], exc
 
-        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="market-live-source") as pool:
-            loaded = list(pool.map(lambda item: load_live(*item), (("x", lambda: _twitter_serenity(cutoff)), ("exa", _exa_search))))
+        with ThreadPoolExecutor(max_workers=min(2, len(live_loaders)), thread_name_prefix="market-live-source") as pool:
+            loaded = list(pool.map(lambda item: load_live(*item), live_loaders))
         for source_type, items, failure in loaded:
             if failure is not None:
                 statuses[source_type] = {"source_type": source_type, "status": "failed", "error_type": type(failure).__name__, "message": str(failure)[:300]}
@@ -335,10 +378,12 @@ def collect(output_dir: Path, edition: str | None = None) -> dict[str, Any]:
                 materials.append(_material(source_type, item))
             statuses[source_type] = {"source_type": source_type, "status": "healthy", "backend": route_backend.get(source_type), "item_count": len(items)}
     else:
-        statuses["x"] = {"source_type": "x", "status": "unavailable", "reason": "SOURCE_ROUTER_LIVE=false", "backend": route_backend.get("x")}
-        statuses["exa"] = {"source_type": "exa", "status": "unavailable", "reason": "SOURCE_ROUTER_LIVE=false", "backend": route_backend.get("exa")}
-    materials, future_count, missing_timestamp_count = _filter_to_cutoff(materials, cutoff)
-    if live and os.environ.get("JINA_ENRICH", "true").lower() == "true":
+        status_reason = "SOURCE_ROUTER_LIVE=false" if live_loaders else "route_not_selected"
+        status_value = "unavailable" if live_loaders else "not_selected"
+        statuses["x"] = {"source_type": "x", "status": status_value, "reason": status_reason, "backend": route_backend.get("x")}
+        statuses["exa"] = {"source_type": "exa", "status": status_value, "reason": status_reason, "backend": route_backend.get("exa")}
+    materials, future_count, missing_timestamp_count, stale_count = _filter_to_cutoff(materials, cutoff, window_start)
+    if use_jina and live and os.environ.get("JINA_ENRICH", "true").lower() == "true":
         jina_count = 0
         jina_error = None
         for item in materials[:5]:
@@ -354,20 +399,30 @@ def collect(output_dir: Path, edition: str | None = None) -> dict[str, Any]:
                 jina_error = f"{type(exc).__name__}: {exc}"[:300]
         statuses["jina"] = {"source_type": "jina", "status": "healthy" if jina_count else "partial", "count": jina_count, "error": jina_error, "backend": route_backend.get("jina") or "Jina Reader"}
     else:
-        statuses["jina"] = {"source_type": "jina", "status": "unavailable", "reason": "JINA_ENRICH=false", "backend": route_backend.get("jina")}
-    if live:
+        statuses["jina"] = {
+            "source_type": "jina",
+            "status": "unavailable" if use_jina else "not_selected",
+            "reason": "JINA_ENRICH=false" if use_jina else "route_not_selected",
+            "backend": route_backend.get("jina"),
+        }
+    if live and use_github:
         projects, github_status = _github_projects(output_dir, cutoff)
         for item in projects:
             materials.append(_material("github", {"title": item.get("full_name"), "body": item.get("description"), "url": item.get("html_url"), "topic": "ai_open_source"}))
         statuses["github"] = {"source_type": "github", **github_status, "backend": github_status.get("backend") or route_backend.get("github")}
     else:
-        statuses["github"] = {"source_type": "github", "status": "unavailable", "reason": "SOURCE_ROUTER_LIVE=false", "backend": route_backend.get("github")}
+        statuses["github"] = {
+            "source_type": "github",
+            "status": "unavailable" if use_github else "not_selected",
+            "reason": "SOURCE_ROUTER_LIVE=false" if use_github else "route_not_selected",
+            "backend": route_backend.get("github"),
+        }
 
     accepted, filtered = _dedupe(materials)
     _write(output_dir / "normalized_materials.json", accepted)
     _write(output_dir / "filtered_materials.json", filtered)
-    _write(output_dir / "source_status.json", {"collected_at": _now(), "edition": edition, "data_cutoff": cutoff.isoformat(), "sources": statuses, "agent_reach_doctor": {name: {"status": item.get("status"), "active_backend": item.get("active_backend")} for name, item in doctor.items() if isinstance(item, dict)}, "source_count": len(accepted), "filtered_count": len(filtered), "future_items_discarded": future_count, "missing_timestamp_count": missing_timestamp_count})
-    return {"source_count": len(accepted), "filtered_count": len(filtered), "sources": statuses, "data_cutoff": cutoff.isoformat(), "future_items_discarded": future_count}
+    _write(output_dir / "source_status.json", {"collected_at": _now(), "edition": edition, "data_cutoff": cutoff.isoformat(), "source_window_start": window_start.isoformat() if window_start else None, "selected_sources": sorted(selected_sources), "sources": statuses, "agent_reach_doctor": {name: {"status": item.get("status"), "active_backend": item.get("active_backend")} for name, item in doctor.items() if isinstance(item, dict)}, "source_count": len(accepted), "filtered_count": len(filtered), "future_items_discarded": future_count, "stale_items_discarded": stale_count, "missing_timestamp_count": missing_timestamp_count})
+    return {"source_count": len(accepted), "filtered_count": len(filtered), "sources": statuses, "data_cutoff": cutoff.isoformat(), "future_items_discarded": future_count, "stale_items_discarded": stale_count}
 
 
 def main() -> int:

@@ -28,7 +28,7 @@ class ValidationCheck(BaseModel):
 class ValidationReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    run_id: str = Field(pattern=r"^market_\d{8}_\d{4}$")
+    run_id: str = Field(pattern=r"^market_\d{8}_\d{4}(?:_[a-z0-9]{4,8})?$")
     status: QualityStatus
     critical_errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from security import get_secret, validate_url
+
 
 ROOT = Path(__file__).resolve().parent
 _CANARY_FAULTS_INJECTED: set[str] = set()
@@ -124,6 +126,7 @@ def call_ollama(prompt: str, model: str | None = None, timeout: float = 90) -> s
     started = time.monotonic()
     try:
         _inject_canary_fault("ollama_unavailable")
+        validate_url(f"{base_url}/api/generate", consumer="content_generator", purpose="generate_market_content", allow_localhost=True)
         payload = _json_request(
             f"{base_url}/api/generate",
             {"model": selected_model, "prompt": prompt, "stream": False, "format": "json", "think": False, "options": {"temperature": 0}},
@@ -140,15 +143,16 @@ def call_ollama(prompt: str, model: str | None = None, timeout: float = 90) -> s
 
 
 def call_gemini(prompt: str, model: str | None = None, timeout: float = 90) -> str:
-    _load_env_file()
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not api_key:
+    secret = get_secret("GEMINI_API_KEY", consumer="content_generator", purpose="generate_market_content", run_id=os.environ.get("MARKET_RUN_ID", "unspecified"))
+    if secret is None:
         raise ProviderError("api_key_missing", "GEMINI_API_KEY is not set.")
+    api_key = secret.reveal("generate_market_content")
     selected_model = model or os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
-    # The key is intentionally used only in the request URL and never logged.
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{selected_model}:generateContent?key={api_key}"
+    # Use a header; credentials must never appear in URLs, traces, or errors.
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{selected_model}:generateContent"
     started = time.monotonic()
     try:
+        validate_url(url, consumer="content_generator", purpose="generate_market_content")
         if os.environ.get("SELF_HEALING_CANARY_MODE", "false").lower() == "true" and os.environ.get("SELF_HEALING_FAULT", "none").strip() == "gemini_invalid_json" and "gemini_invalid_json" not in _CANARY_FAULTS_INJECTED:
             _CANARY_FAULTS_INJECTED.add("gemini_invalid_json")
             _record_model_span("gemini", selected_model, started, response_length=8, error_type="provider_invalid_json")
@@ -156,7 +160,7 @@ def call_gemini(prompt: str, model: str | None = None, timeout: float = 90) -> s
         payload = _json_request(
             url,
             {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}},
-            {}, timeout,
+            {"x-goog-api-key": api_key}, timeout,
         )
         candidates = payload.get("candidates") or []
         if candidates and isinstance(candidates[0], dict):
@@ -194,7 +198,7 @@ def health_check(provider: str) -> dict[str, Any]:
             result.update({"status": "unhealthy", "latency_ms": int((time.monotonic() - started) * 1000), "blocking_reason": type(exc).__name__})
         return result
     if provider == "gemini":
-        configured = bool(os.environ.get("GEMINI_API_KEY", "").strip())
+        configured = get_secret("GEMINI_API_KEY", consumer="content_generator", purpose="generate_market_content", run_id="healthcheck") is not None
         return {
             "provider": "gemini",
             "configured": configured,
@@ -206,4 +210,4 @@ def health_check(provider: str) -> dict[str, Any]:
         }
     if provider == "rule_template":
         return {"provider": "rule_template", "configured": True, "model": None}
-    return {"provider": provider, "configured": bool(os.environ.get("OPENAI_API_KEY", "").strip()), "model": os.environ.get("OPENAI_MODEL", "gpt-5")}
+    return {"provider": provider, "configured": get_secret("OPENAI_API_KEY", consumer="content_generator", purpose="generate_market_content", run_id="healthcheck") is not None, "model": os.environ.get("OPENAI_MODEL", "gpt-5")}

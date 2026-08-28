@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "operators": [
+    {"actor": "replace-with-os-user", "roles": ["operator"]}
+  ],
+  "note": "Copy to operators.json locally; never commit personal identity or credentials."
+}

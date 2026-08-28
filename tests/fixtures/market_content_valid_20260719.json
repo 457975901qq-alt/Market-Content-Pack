@@ -3,8 +3,8 @@
   "timezone": "Asia/Tokyo",
   "edition": "evening_premarket_watch",
   "prompt_version": "evening_premarket_watch_v2",
-  "data_cutoff": "2026-07-19T17:30:00+09:00",
-  "scheduled_local_time": "17:30",
+  "data_cutoff": "2026-07-19T18:30:00+09:00",
+  "scheduled_local_time": "18:30",
   "source_window_start": "2026-07-19T06:30:00+09:00",
   "source_window_end": "2026-07-19T17:30:00+09:00",
   "market_session": "premarket_watch",
@@ -24,11 +24,5 @@
     "title": "预览市场内容",
     "subtitle": "仅验证版式和质量门禁",
     "sections": [{"heading": "数据状态", "content": "预览数据，仅验证版式。"}]
-  },
-  "douyin": {
-    "title": "每日市场内容包预览",
-    "cover_title": "仅验证版式",
-    "caption": "预览数据，不用于发布。",
-    "hashtags": ["#预览"]
   }
 }

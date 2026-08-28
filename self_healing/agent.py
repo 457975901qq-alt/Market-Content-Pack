@@ -21,18 +21,26 @@ from typing import Any, Callable
 
 from .gap_analyzer import analyze_gap
 from .repair_planner import RepairPlanner
+from edition_profiles import resolve_edition_context
 from market_quotes import CORE_SYMBOLS, collect_quotes
 from repair_validation import validate_repair_result
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY = ROOT / "config" / "self_healing_policy.json"
-RUN_ID_RE = re.compile(r"^market_\d{8}_\d{4}$")
+RUN_ID_RE = re.compile(r"^market_\d{8}_\d{4}(?:_[a-z0-9]{4,8})?$")
 
 
 class FailureCategory(str, Enum):
     ollama_unavailable = "ollama_unavailable"
     temporary_network_failure = "temporary_network_failure"
+    market_data_missing = "market_data_missing"
+    market_data_conflict = "market_data_conflict"
+    market_data_stale = "market_data_stale"
+    market_data_future = "market_data_future"
+    market_data_not_validated = "market_data_not_validated"
+    market_provider_unavailable = "market_provider_unavailable"
+    # Kept for compatibility with the existing L5 repair selector payload.
     market_data_incomplete = "market_data_incomplete"
     gemini_json_parse_failure = "gemini_json_parse_failure"
     unknown_failure = "unknown_failure"
@@ -61,6 +69,8 @@ class FailureClassification:
     recommended_action: str
     resume_from: str
     requires_human_approval: bool
+    recoverable: bool = True
+    details: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -115,21 +125,35 @@ def _policy(path: Path = DEFAULT_POLICY) -> dict[str, Any]:
 
 def classify_failure(run_id: str, failure_id: str, step: str, message: str, context: dict[str, Any] | None = None) -> FailureClassification:
     if not RUN_ID_RE.fullmatch(run_id):
-        raise ValueError("run_id must match market_YYYYMMDD_HHMM")
+        raise ValueError("run_id must match market_YYYYMMDD_HHMM[_short_id]")
+    context = context or {}
     text = message.lower()
+    market_details = _market_failure_details(text, context)
     if "quality_gate" in text or "qa_report" in text:
         category, resume, action = FailureCategory.unknown_failure, step, "stop and request human approval for the quality-gate artifact failure"
     elif "ollama" in text:
         category, resume, action = FailureCategory.ollama_unavailable, "generate_content", "healthcheck Ollama, restart once, then select Gemini"
     elif "timeout" in text or "503" in text or "connection" in text:
         category, resume, action = FailureCategory.temporary_network_failure, step, "retry the failed collector with bounded backoff and use configured backup"
-    elif ("market_data" in text or "market data" in text) and ("missing" in text or "incomplete" in text):
-        category, resume, action = FailureCategory.market_data_incomplete, "collect_market_quotes", "recollect only missing market fields, validate, then resume dependent steps"
+    elif market_details is not None:
+        category, resume, action = market_details["category"], "collect_market_quotes", market_details["action"]
     elif "json" in text or "parse" in text:
         category, resume, action = FailureCategory.gemini_json_parse_failure, "generate_content", "repair JSON deterministically, retry twice, then use rule template"
     else:
         category, resume, action = FailureCategory.unknown_failure, step, "stop and request human approval"
     human = category == FailureCategory.unknown_failure
+    recoverable = category not in {
+        FailureCategory.market_data_future,
+        FailureCategory.market_data_stale,
+        FailureCategory.market_data_not_validated,
+    }
+    details = market_details.get("details", {}) if market_details else {}
+    if category == FailureCategory.market_data_future:
+        action = "block: quote is after the fixed edition cutoff; an as-of-capable tool is required"
+    elif category == FailureCategory.market_data_stale:
+        action = "block: no safe as-of or alternate historical quote action is registered"
+    elif category == FailureCategory.market_data_not_validated:
+        action = "inspect market-data validation details before selecting a repair action"
     return FailureClassification(
         failure_id=failure_id,
         run_id=run_id,
@@ -137,11 +161,66 @@ def classify_failure(run_id: str, failure_id: str, step: str, message: str, cont
         failed_step=step,
         root_cause=message,
         confidence=0.95 if not human else 0.5,
-        risk_level="high" if human else "low",
+        risk_level="high" if human or not recoverable else "low",
         recommended_action=action,
         resume_from=resume,
         requires_human_approval=human,
+        recoverable=recoverable,
+        details=details,
     )
+
+
+def _market_failure_details(text: str, context: dict[str, Any]) -> dict[str, Any] | None:
+    """Classify market failures from the artifact evidence, not only prose."""
+    error_items: list[dict[str, Any]] = []
+    for key in ("validation_errors", "errors"):
+        value = context.get(key)
+        if isinstance(value, list):
+            error_items.extend(item for item in value if isinstance(item, dict))
+    artifact = context.get("market_data")
+    if isinstance(artifact, dict) and isinstance(artifact.get("errors"), list):
+        error_items.extend(item for item in artifact["errors"] if isinstance(item, dict))
+    evidence = " ".join(
+        [text]
+        + [" ".join(str(item.get(name, "")) for name in ("error_type", "error_code", "message", "reason")) for item in error_items]
+    ).lower()
+    if not any(token in evidence for token in ("market_data", "market data", "market_provider", "quote", "timestamp", "symbol")):
+        return None
+    details: dict[str, Any] = {}
+    symbols = sorted({str(item.get("symbol")) for item in error_items if item.get("symbol")})
+    if symbols:
+        details["symbols"] = symbols
+    artifact_cutoff = context.get("cutoff") or (artifact.get("data_cutoff") if isinstance(artifact, dict) else None)
+    if artifact_cutoff:
+        details["cutoff"] = str(artifact_cutoff)
+    for item in error_items:
+        if item.get("symbol") and item.get("data_timestamp"):
+            details.setdefault("quote_timestamps", {})[str(item["symbol"])] = str(item["data_timestamp"])
+    if isinstance(artifact, dict):
+        for quote in artifact.get("quotes", []) if isinstance(artifact.get("quotes"), list) else []:
+            if not isinstance(quote, dict) or not quote.get("symbol"):
+                continue
+            symbol = str(quote["symbol"])
+            if symbols and symbol not in symbols:
+                continue
+            if quote.get("data_timestamp"):
+                details.setdefault("quote_timestamps", {})[symbol] = str(quote["data_timestamp"])
+            source = (quote.get("sources") or {}).get("primary") if isinstance(quote.get("sources"), dict) else None
+            if isinstance(source, dict) and source.get("provider"):
+                details.setdefault("sources", {})[symbol] = str(source["provider"])
+    if "future_timestamp" in evidence or "after_cutoff" in evidence or "post_cutoff" in evidence:
+        return {"category": FailureCategory.market_data_future, "action": "block temporal cutoff violation", "details": details}
+    if "source_conflict" in evidence or "conflict" in evidence or "disagree" in evidence:
+        return {"category": FailureCategory.market_data_conflict, "action": "cross-check conflicting market quotes", "details": details}
+    if "staleness_window_exceeded" in evidence or "stale_market_data" in evidence or "stale" in evidence:
+        return {"category": FailureCategory.market_data_stale, "action": "block stale quote until a valid historical source is available", "details": details}
+    if "market_data_missing" in evidence or "missing_required" in evidence or "missing symbol" in evidence or "incomplete" in evidence or "missing" in evidence:
+        return {"category": FailureCategory.market_data_missing, "action": "cross-check or recollect only missing market fields", "details": details}
+    if "market_provider_unavailable" in evidence or "provider unavailable" in evidence or "source unavailable" in evidence:
+        return {"category": FailureCategory.market_provider_unavailable, "action": "retry or switch to a configured market provider", "details": details}
+    if "market_data_not_validated" in evidence or "market_data" in evidence:
+        return {"category": FailureCategory.market_data_not_validated, "action": "inspect market-data validation details before recovery", "details": details}
+    return None
 
 
 def _apply_selected_classification(
@@ -166,11 +245,22 @@ def _apply_selected_classification(
 
     # These are the only L5-3 mappings with existing fixed adapters. Other
     # categories remain human-gated until a corresponding safe adapter exists.
+    # Preserve a more specific market classification derived from artifact
+    # evidence. The L5 selector only knows the broad DATA_SOURCE family.
+    specific_market_categories = {
+        FailureCategory.market_data_future.value,
+        FailureCategory.market_data_stale.value,
+        FailureCategory.market_data_conflict.value,
+        FailureCategory.market_data_not_validated.value,
+    }
+    if classification.failure_category in specific_market_categories:
+        return classification
     if category == "DATA_SOURCE":
         classification.failure_category = FailureCategory.market_data_incomplete.value
         classification.requires_human_approval = False
         classification.confidence = 0.98
         classification.risk_level = "low"
+        classification.recoverable = True
     elif category == "MODEL_OUTPUT" and error_code in {
         "empty_response",
         "json_parse_failed",
@@ -342,13 +432,17 @@ def _default_retry_collector(step: str) -> dict[str, Any]:
 def _default_market_quotes(symbols: list[str]) -> dict[str, Any]:
     selected = list(dict.fromkeys([*CORE_SYMBOLS, *(symbol.upper() for symbol in symbols)]))
     edition = os.environ.get("MARKET_EDITION", "evening_premarket_watch")
-    return collect_quotes(edition, symbols=selected)
+    return collect_quotes(
+        edition,
+        symbols=selected,
+        as_of=resolve_edition_context(edition).scheduled_cutoff,
+    )
 
 
 class RepairController:
     def __init__(self, run_id: str, canary_root: Path, adapters: RepairAdapters | None = None, policy_path: Path = DEFAULT_POLICY, sleep: Callable[[float], None] = time.sleep):
         if not RUN_ID_RE.fullmatch(run_id):
-            raise ValueError("run_id must match market_YYYYMMDD_HHMM")
+            raise ValueError("run_id must match market_YYYYMMDD_HHMM[_short_id]")
         self.run_id = run_id
         self.root = canary_root / run_id
         self.root.mkdir(parents=True, exist_ok=True)
@@ -407,6 +501,15 @@ class RepairController:
             return self._blocked(classification, "repair_limit_exceeded", attempt)
         if classification.requires_human_approval:
             return self._blocked(classification, "unknown_failure_requires_human_approval", attempt, waiting=True)
+        if category in {
+            FailureCategory.market_data_future.value,
+            FailureCategory.market_data_stale.value,
+            FailureCategory.market_data_conflict.value,
+            FailureCategory.market_data_not_validated.value,
+        }:
+            # These outcomes need planner/tool capability evaluation. The
+            # controller must not burn retries on the same latest-quote call.
+            return self._blocked(classification, f"{category}_requires_planner_capability", attempt)
         plan = self._plan(classification, message, context, gap)
         self._event(RepairStatus.repair_planned, classification, repair_id=plan.repair_id, resume_from=classification.resume_from, gap=gap)
         self.total_repairs += 1
@@ -477,8 +580,8 @@ class RepairController:
                 if result.get("status") == "success":
                     return {"repair_action_succeeded": True, "original_failure_resolved": True, "resume_from": classification.failed_step, "resume_succeeded": True, "retry_count": attempt, "selected_fallback": result.get("selected_fallback"), "validation_passed": True}
             return {"repair_action_succeeded": False, "original_failure_resolved": False, "resume_from": classification.failed_step, "resume_succeeded": False, "retry_count": len(waits), "validation_passed": False}
-        if category == FailureCategory.market_data_incomplete.value:
-            symbols = list(context.get("missing_symbols") or ["SPX", "NDX", "DJI"])
+        if category in {FailureCategory.market_data_incomplete.value, FailureCategory.market_data_missing.value}:
+            symbols = list(context.get("missing_symbols") or CORE_SYMBOLS)
             collect = self.adapters.collect_market_quotes or _default_market_quotes
             data = collect(symbols)
             validate = self.adapters.validate_market_data
@@ -490,6 +593,8 @@ class RepairController:
             resumed = resume(["validate_market_data", "generate_content", "final_validation"], data) if resume else {"status": "unavailable", "reason": "resume_market_pipeline_binding_missing"}
             ok = resumed.get("status") == "success"
             return {"repair_action_succeeded": True, "original_failure_resolved": True, "resume_from": "collect_market_quotes", "resume_succeeded": ok, "validation_passed": True, "market_data": data, "validation_result": validation, "resume_result": resumed, "market_data_version": data.get("market_data_version")}
+        if category == FailureCategory.market_provider_unavailable.value:
+            return {"repair_action_succeeded": False, "original_failure_resolved": False, "resume_from": "collect_market_quotes", "resume_succeeded": False, "validation_passed": False, "blocking_reason": "no_market_provider_switch_adapter"}
         if category == FailureCategory.gemini_json_parse_failure.value:
             request = self.adapters.request_gemini
             if request:

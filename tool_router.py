@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from security import get_secret
+
 
 ROOT = Path(__file__).resolve().parent
 POLICY_PATH = ROOT / "config" / "tool_routing_policy.json"
@@ -90,7 +92,7 @@ class ToolRouter:
         item = (self.health_report.get("services") or {}).get(service) or {}
         status = str(item.get("status") or "")
         if tool == "openai":
-            return ("healthy", None) if os.environ.get("OPENAI_API_KEY", "").strip() else ("unavailable", "OPENAI_API_KEY_missing")
+            return ("healthy", None) if get_secret("OPENAI_API_KEY", consumer="content_generator", purpose="generate_market_content", run_id="tool-router") else ("unavailable", "OPENAI_API_KEY_missing")
         if status in {"healthy", "configured"}:
             return status, None
         return status or "unknown", item.get("blocking_reason") or "health_status_unavailable"

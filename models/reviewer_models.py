@@ -36,7 +36,7 @@ class ReviewCheck(BaseModel):
 class ReviewResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    run_id: str = Field(pattern=r"^market_\d{8}_\d{4}$")
+    run_id: str = Field(pattern=r"^market_\d{8}_\d{4}(?:_[a-z0-9]{4,8})?$")
     content_hash: str = Field(pattern=r"^[0-9a-fA-F]{64}$")
     reviewer: ReviewerInfo
     decision: ReviewDecision
@@ -45,6 +45,7 @@ class ReviewResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     checks: list[ReviewCheck] = Field(default_factory=list)
     reviewed_at: datetime
+    independence_warning: bool = False
 
     @model_validator(mode="after")
     def approved_has_no_critical_findings(self) -> "ReviewResult":
