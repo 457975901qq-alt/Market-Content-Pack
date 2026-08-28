@@ -1,0 +1,30 @@
+.env
+*.env
+__pycache__/
+*.pyc
+logs/
+outputs/
+tmp/
+.DS_Store
+
+# Local environments and caches
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Generated artifacts and temporary files
+*.log
+*.png
+*.tmp
+*.bak
+
+# Secrets and local credentials
+*.pem
+*.key
+*.p12
+*.cookie
+cookies.*
