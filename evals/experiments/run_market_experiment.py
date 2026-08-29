@@ -45,7 +45,7 @@ def _candidate_output(case: dict[str, Any], candidate: str) -> dict[str, Any]:
     category = case.get("metadata", {}).get("category")
     payload["candidate"] = candidate
     payload["text"] = str(payload.get("text", ""))
-    if category in {"ollama_output_anomaly", "gemini_fallback", "market_data_missing", "image_qa_renderer_failure"}:
+    if category in {"ollama_output_anomaly", "gemini_fallback", "market_data_missing", "renderer_failure"}:
         payload["delivery_allowed"] = False
     if candidate == "local_template":
         payload["text"] = f"{case.get('reference', {}).get('expected_theme', 'market_observation')}：数据暂缺，仅作信息整理。"

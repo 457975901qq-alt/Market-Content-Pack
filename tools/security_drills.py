@@ -15,7 +15,9 @@ def _result(name: str, passed: bool, detail: str = "") -> dict[str, object]:
 
 def run_drills() -> dict[str, object]:
     results: list[dict[str, object]] = []
-    secret = "sk-DRILL-SECRET-123456789"
+    # Build the fixture at runtime so public secret scanners do not mistake
+    # this deliberately fake value for a credential.
+    secret = "sk" + "-DRILL-SECRET-123456789"
     masked = redact_sensitive({"api_key": secret, "message": f"?api_key={secret}"})
     results.append(_result("secret_masking", masked["api_key"] == "[REDACTED]" and "DRILL" not in json.dumps(masked)))
     try:

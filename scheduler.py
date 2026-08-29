@@ -36,12 +36,12 @@ ROOT = Path(__file__).resolve().parent
 TOKYO = ZoneInfo("Asia/Tokyo")
 PIPELINE_VERSION = "6.3.0"
 SCHEMA_VERSION = "validation_models_v1"
-JOB_TYPES = ("morning_content", "morning_images", "evening_content", "evening_images")
+JOB_TYPES = ("morning_content", "evening_content")
 TERMINAL_STATUSES = {"succeeded", "blocked", "cancelled", "skipped", "dead_letter"}
 CLAIMABLE_STATUSES = {"pending", "retry_wait", "recovering"}
-STAGES = ("input_selection", "source_collection", "normalization", "content_generation", "schema_validation", "cross_validation", "reviewer_validation", "image_rendering", "image_qa", "delivery")
+STAGES = ("input_selection", "source_collection", "normalization", "content_generation", "schema_validation", "cross_validation", "reviewer_validation", "delivery")
 NON_RETRYABLE_DEFAULTS = {
-    "INPUT_DATE_MISMATCH", "INPUT_SESSION_MISMATCH", "CROSS_VALIDATION_CONFLICT", "TEXT_IMAGE_MISMATCH",
+    "INPUT_DATE_MISMATCH", "INPUT_SESSION_MISMATCH", "CROSS_VALIDATION_CONFLICT",
     "INVALID_SCHEMA_VERSION", "GOLD_INSTRUMENT_MISMATCH", "SECRET_EXPOSURE_DETECTED", "P0_NOT_BLOCKED",
     "CROSS_DATE_CATCHUP_BLOCKED", "DEPENDENCY_WINDOW_EXPIRED", "DEPENDENCY_FAILED",
 }
@@ -197,8 +197,6 @@ def evaluate_checkpoint(checkpoint: dict[str, Any], expected: dict[str, Any]) ->
         return CheckpointCompatibilityResult("restart", False, "input_selection", ("CHECKPOINT_CORRUPT",), STAGES)
     if expected.get("prompt_version") and checkpoint.get("prompt_version") != expected.get("prompt_version"):
         return CheckpointCompatibilityResult("restart", False, "content_generation", ("PROMPT_VERSION_CHANGED",), STAGES[3:])
-    if expected.get("renderer_version") and checkpoint.get("renderer_version") != expected.get("renderer_version"):
-        return CheckpointCompatibilityResult("resume", True, "image_rendering", ("RENDERER_VERSION_CHANGED",), STAGES[7:])
     resume_index = min(len(STAGES) - 1, STAGES.index(last) + 1)
     return CheckpointCompatibilityResult("resume", True, STAGES[resume_index], (), STAGES[resume_index:])
 
@@ -700,12 +698,6 @@ class Scheduler:
         current = (current or now_local()).astimezone(TOKYO)
         if job_type not in JOB_TYPES:
             raise ValueError(f"unsupported_job_type:{job_type}")
-        if job_type.endswith("_images"):
-            if current.hour < 6 or (current.hour == 6 and current.minute < 30):
-                raise ValueError("MANUAL_TRIGGER_WINDOW_BLOCKED")
-            expected_session = "morning" if current.hour < 18 or (current.hour == 18 and current.minute < 30) else "evening"
-            if _session_for(job_type, self.config) != expected_session:
-                raise ValueError("INPUT_SESSION_MISMATCH")
         scheduled = scheduled_at_for(job_type, current.date().isoformat(), self.config)
         item, _ = self.store.enqueue(job_type, current.date().isoformat(), _session_for(job_type, self.config), scheduled, "manual", payload={"manual_trigger_at": iso(current), "timezone": "Asia/Tokyo"}, requested_by="cli", **self._release_for_job(job_type))
         return item
@@ -773,28 +765,7 @@ class Worker:
             if content_path.exists():
                 payload.update({"output_root": str(output_root.resolve()), "content_path": str(content_path.resolve()), "content_hash": _sha256(content_path), "input_content_id": content_path.name})
             return {"status": "succeeded", "payload": payload, "summary_path": str((output_root / "logs" / "run_summary.json").resolve())}
-        dependency = self.scheduler.store.get_by_key(job.get("input_dependency")) if job.get("input_dependency") else None
-        validation = validate_dependency(job, dependency, self.scheduler.root)
-        if not validation.get("valid"):
-            return {"status": "failed", "error_code": validation.get("error_code"), "error_message": validation.get("reason"), "retryable": False}
-        content_path = Path(validation["content_path"])
-        output_root = self.scheduler.root / "outputs" / "shadow" / job["run_id"]
-        image_path = output_root / "images" / "market_content.svg"
-        log_root = output_root / "logs"
-        try:
-            from image_renderer import render_image_pack, validate_image_pack
-
-            render_image_pack(content_path, image_path.parent, job["run_id"])
-            qa = validate_image_pack(image_path, content_path, job["run_id"])
-            _write_json(log_root / "image_qa.json", qa)
-            if qa.get("status") != "pass":
-                self._write_job_summary(job, output_root, "failed", "IMAGE_QA_FAILED")
-                return {"status": "failed", "error_code": "IMAGE_QA_FAILED", "error_message": "image QA gate failed", "retryable": False, "summary_path": str((log_root / "run_summary.json").resolve())}
-            self._write_job_summary(job, output_root, "success", None)
-            return {"status": "succeeded", "payload": {**(job.get("payload") or {}), "output_root": str(output_root.resolve()), "image_path": str(image_path.resolve()), "input_content_id": validation["input_content_id"], "input_content_hash": validation["content_hash"]}, "summary_path": str((log_root / "run_summary.json").resolve())}
-        except Exception as exc:
-            self._write_job_summary(job, output_root, "failed", "RENDERER_NOT_REGISTERED")
-            return {"status": "failed", "error_code": "RENDERER_NOT_REGISTERED", "error_message": str(exc), "retryable": False, "summary_path": str((log_root / "run_summary.json").resolve())}
+        return {"status": "blocked", "error_code": "UNSUPPORTED_JOB_TYPE", "error_message": job.get("job_type"), "retryable": False}
 
     def _write_job_summary(self, job: dict[str, Any], output_root: Path, status: str, error_code: str | None) -> None:
         _write_json(output_root / "logs" / "run_summary.json", {"run_id": job["run_id"], "job_id": job["job_id"], "target_date": job["target_date"], "session": job["session"], "pipeline_version": PIPELINE_VERSION, "release_id": job.get("release_id"), "requested_version": job.get("requested_version"), "resolved_version": job.get("resolved_version"), "started_at": job.get("started_at"), "finished_at": iso(), "status": status, "failed_stage": job.get("current_stage") if status != "success" else None, "error_code": error_code, "delivery_enabled": False, "delivery_status": "skipped"})
@@ -851,7 +822,7 @@ class Worker:
             self._write_worker_status("shutting_down")
 
     def run_scheduler_forever(self, interval_seconds: float | None = None) -> None:
-        """Combined launchd-friendly loop: enqueue today's four jobs, then work."""
+        """Combined launchd-friendly loop: enqueue today's text jobs, then work."""
         interval = float(interval_seconds or self.scheduler.config.get("poll_interval_seconds", 15))
         self._write_worker_status("started")
         try:
@@ -903,8 +874,6 @@ def run_offline_drill(root: Path = ROOT) -> dict[str, Any]:
         scheduler = Scheduler(drill_root, drill_root / "runtime" / "state_index.sqlite3", config)
         base = datetime(2026, 8, 6, 6, 30, tzinfo=TOKYO)
         jobs = scheduler.enqueue_today(base)
-        image = scheduler.store.get_by_key("morning_images:2026-08-06:morning")
-        waiting_before = image and image["status"] == "waiting_dependency"
         content = scheduler.store.get_by_key("morning_content:2026-08-06:morning")
         content_done = False
         if content:
@@ -912,7 +881,7 @@ def run_offline_drill(root: Path = ROOT) -> dict[str, Any]:
             with scheduler.store.transaction() as db:
                 db.execute("UPDATE scheduled_jobs SET status='succeeded', payload_json=? WHERE job_id=?", (_json({"content_path": str(drill_root / "content.json")}), content["job_id"]))
         after = scheduler.store.claim("drill_worker", base + timedelta(minutes=10))
-        dependency_ready = after is not None and after["job_type"] == "morning_images"
+        text_job_claimed = after is not None and after["job_type"] == "morning_content"
         conflict = scheduler.store.claim("drill_worker_2", base + timedelta(minutes=10)) is None
         crashed = scheduler.store.get_by_key("evening_content:2026-08-06:evening")
         crash_recovered = False
@@ -922,7 +891,7 @@ def run_offline_drill(root: Path = ROOT) -> dict[str, Any]:
                 scheduler.store.mark_running(claimed, "crash_worker", "content_generation")
                 scheduler.store.recover_stale(base + timedelta(hours=13))
                 crash_recovered = scheduler.store.get(crashed["job_id"])["status"] == "recovering"
-        report = {"generated_at": iso(), "offline": True, "external_delivery": False, "scenarios": {"normal_dependency_run": waiting_before and content_done and dependency_ready, "mid_run_crash_recovery": crash_recovered, "duplicate_claim_competition": conflict, "wrong_session_input": evaluate_checkpoint({"run_id": "r", "target_date": "2026-08-06", "session": "morning", "last_completed_stage": "image_rendering"}, {"run_id": "r", "target_date": "2026-08-06", "session": "evening"}).decision == "restart", "cross_date_recovery": evaluate_checkpoint({"run_id": "r", "target_date": "2026-08-05", "session": "morning", "last_completed_stage": "content_generation"}, {"run_id": "r", "target_date": "2026-08-06", "session": "morning"}).decision == "restart"}}
+        report = {"generated_at": iso(), "offline": True, "external_delivery": False, "scenarios": {"text_jobs_enqueued": len(jobs) == 2, "content_job_claimed": bool(content_done and text_job_claimed), "mid_run_crash_recovery": crash_recovered, "duplicate_claim_competition": conflict, "wrong_session_input": evaluate_checkpoint({"run_id": "r", "target_date": "2026-08-06", "session": "morning", "last_completed_stage": "content_generation"}, {"run_id": "r", "target_date": "2026-08-06", "session": "evening"}).decision == "restart", "cross_date_recovery": evaluate_checkpoint({"run_id": "r", "target_date": "2026-08-05", "session": "morning", "last_completed_stage": "content_generation"}, {"run_id": "r", "target_date": "2026-08-06", "session": "morning"}).decision == "restart"}}
     report["passed"] = all(report["scenarios"].values())
     output = root / "outputs" / "scheduler"
     _write_json(output / "drill_report.json", report)

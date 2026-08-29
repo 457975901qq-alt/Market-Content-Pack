@@ -108,24 +108,12 @@ def _as_bool(value: Any, default: bool = False) -> bool:
     return default
 
 
-def _image_generation_enabled(manifest: dict[str, Any], delivery_status: dict[str, Any]) -> bool:
-    if "image_generation_enabled" in delivery_status:
-        return _as_bool(delivery_status["image_generation_enabled"])
-    if "image_generation_enabled" in manifest:
-        return _as_bool(manifest["image_generation_enabled"])
-    return manifest.get("mode") == "image"
-
-
 def _external_publish_enabled(manifest: dict[str, Any], delivery_status: dict[str, Any]) -> bool:
     if "external_publish_enabled" in delivery_status:
         return _as_bool(delivery_status["external_publish_enabled"])
     if "external_publish_enabled" in manifest:
         return _as_bool(manifest["external_publish_enabled"])
     return manifest.get("external_publish") not in {None, "removed", "disabled", "off"}
-
-
-def _image_status(manifest: dict[str, Any], delivery_status: dict[str, Any]) -> str:
-    return "已开启" if _image_generation_enabled(manifest, delivery_status) else "已关闭"
 
 
 def _publish_feature_status(manifest: dict[str, Any], delivery_status: dict[str, Any]) -> str:
@@ -366,7 +354,6 @@ def _runtime_rows(content: dict[str, Any], manifest: dict[str, Any], delivery_st
     return [
         ("内容 QA", _qa_label(_qa_status(manifest, delivery_status))),
         ("来源数量", _source_count(manifest, delivery_status)),
-        ("图片生成", _image_status(manifest, delivery_status)),
         ("外部发布功能", _publish_feature_status(manifest, delivery_status)),
         ("交付结果", _delivered_label(manifest, delivery_status)),
         ("报告日期", _report_date(content, manifest)),

@@ -17,7 +17,6 @@ class RecoveryPolicy(BaseModel):
     allow_section_repair: bool = True
     allow_code_modification: bool = False
     allow_external_publish: bool = False
-    allow_image_generation: bool = False
 
     @classmethod
     def from_config(cls, path: Path) -> "RecoveryPolicy":
@@ -32,7 +31,6 @@ class RecoveryPolicy(BaseModel):
             allow_section_repair=True,
             allow_code_modification=False,
             allow_external_publish=False,
-            allow_image_generation=False,
         )
 
     def allows(self, operation: str) -> bool:

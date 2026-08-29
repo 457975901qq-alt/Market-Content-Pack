@@ -17,6 +17,8 @@ evals/cache/
 evals/checkpoints/
 tmp/
 .DS_Store
+.playwright-cli/
+.playwright-mcp/
 
 # Local environments and caches
 .venv/

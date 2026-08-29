@@ -285,7 +285,6 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- 已完成任务数：{metrics.get('completed_task_count', 0)}",
         f"- 今日失败次数：{metrics.get('failure_count', 0)}",
         f"- Fallback 次数：{metrics.get('fallback_count', 0)}",
-        "- 图片生成：已移除，当前仅输出文字与分析",
         f"- 平均运行时间：{_display(metrics.get('average_runtime_seconds'))} 秒", "",
         "## 安全", "", "- 外部发布：已移除", "- 敏感值写入报告：否", "",
     ])

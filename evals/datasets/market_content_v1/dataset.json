@@ -1269,7 +1269,7 @@
         "expected_result": "fail"
       },
       "metadata": {
-        "category": "image_qa_renderer_failure",
+        "category": "renderer_failure",
         "fixture": true,
         "source_kind": "fixture",
         "source_run_id": null,
@@ -1318,7 +1318,7 @@
         "expected_result": "fail"
       },
       "metadata": {
-        "category": "image_qa_renderer_failure",
+        "category": "renderer_failure",
         "fixture": true,
         "source_kind": "fixture",
         "source_run_id": null,
@@ -1367,7 +1367,7 @@
         "expected_result": "fail"
       },
       "metadata": {
-        "category": "image_qa_renderer_failure",
+        "category": "renderer_failure",
         "fixture": true,
         "source_kind": "fixture",
         "source_run_id": null,
@@ -1416,7 +1416,7 @@
         "expected_result": "fail"
       },
       "metadata": {
-        "category": "image_qa_renderer_failure",
+        "category": "renderer_failure",
         "fixture": true,
         "source_kind": "fixture",
         "source_run_id": null,
@@ -1465,7 +1465,7 @@
         "expected_result": "fail"
       },
       "metadata": {
-        "category": "image_qa_renderer_failure",
+        "category": "renderer_failure",
         "fixture": true,
         "source_kind": "fixture",
         "source_run_id": null,

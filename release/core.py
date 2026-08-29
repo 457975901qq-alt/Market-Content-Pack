@@ -42,7 +42,7 @@ RELEASE_ERROR_CODES = {
     "ARTIFACT_HASH_MISMATCH", "MIGRATION_ROLLBACK_BLOCKED", "CHECKPOINT_VERSION_INCOMPATIBLE",
     "ROLLBACK_TARGET_INVALID", "ROLLBACK_COMPATIBILITY_FAILED", "DEPLOYMENT_DRIFT_DETECTED",
     "CANARY_INSUFFICIENT_DATA", "CANARY_CRITICAL_REGRESSION", "CANARY_HIGH_REGRESSION",
-    "WRONG_SESSION", "STALE_INPUT", "SCHEMA_FAILURE", "TEXT_IMAGE_MISMATCH", "RELEASE_AUDIT_FAILED",
+    "WRONG_SESSION", "STALE_INPUT", "SCHEMA_FAILURE", "RELEASE_AUDIT_FAILED",
 }
 
 
@@ -137,7 +137,7 @@ def _config_payload(root: Path) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "database_version": "scheduler_sqlite_v1",
         "prompt_version": "|".join(sorted(set(prompts))) or "unknown",
-        "renderer_version": "svg_renderer_v1",
+        "renderer_version": "text_only_v1",
         "config_version": "config-" + hashlib.sha256(_json(edition).encode()).hexdigest()[:12],
         "regression_baseline_version": BASELINE_VERSION,
     }
@@ -298,7 +298,7 @@ def checkpoint_compatibility(*, producer: Mapping[str, Any], current: Mapping[st
     if "prompt_version" in mismatches:
         return {"status": "passed", "decision": "requires_restart", "code": "PROMPT_VERSION_CHANGED", "mismatches": mismatches}
     if "renderer_version" in mismatches:
-        return {"status": "passed", "decision": "resume_from_image_rendering", "code": "RENDERER_VERSION_CHANGED", "mismatches": mismatches}
+        return {"status": "passed", "decision": "resume_from_content_generation", "code": "RENDERER_VERSION_CHANGED", "mismatches": mismatches}
     return {"status": "passed", "decision": "resume", "mismatches": []}
 
 
@@ -402,9 +402,9 @@ class VersionRouter:
     def route(self, job_type: str, *, stage: str = "stable") -> dict[str, Any]:
         candidate_jobs = {
             "shadow": set(), "canary-1": {"morning_content"},
-            "canary-2": {"morning_content", "morning_images"},
-            "canary-3": {"morning_content", "morning_images", "evening_content", "evening_images"},
-            "active": {"morning_content", "morning_images", "evening_content", "evening_images"},
+            "canary-2": {"morning_content"},
+            "canary-3": {"morning_content", "evening_content"},
+            "active": {"morning_content", "evening_content"},
         }.get(stage, set())
         selected = self.candidate_version if self.candidate_version and job_type in candidate_jobs else self.active_version
         return {"job_type": job_type, "active_version": self.active_version, "selected_version": selected, "routing_reason": "candidate_canary" if selected == self.candidate_version else "stable", "stage": stage}
@@ -493,7 +493,7 @@ def canary_gate(results: Sequence[Mapping[str, Any]], minimum_runs: int = 2) -> 
     for item in results:
         if item.get("p0") or item.get("critical_regressions", 0) or item.get("high_regressions", 0):
             blockers.append("CANARY_CRITICAL_REGRESSION" if item.get("critical_regressions", 0) or item.get("p0") else "CANARY_HIGH_REGRESSION")
-        for flag, code in (("wrong_session", "WRONG_SESSION"), ("stale_input", "STALE_INPUT"), ("schema_passed", "SCHEMA_FAILURE"), ("text_image_match", "TEXT_IMAGE_MISMATCH"), ("checkpoint_compatible", "CHECKPOINT_VERSION_INCOMPATIBLE")):
+        for flag, code in (("wrong_session", "WRONG_SESSION"), ("stale_input", "STALE_INPUT"), ("schema_passed", "SCHEMA_FAILURE"), ("checkpoint_compatible", "CHECKPOINT_VERSION_INCOMPATIBLE")):
             if flag in item and item.get(flag) is False:
                 blockers.append(code)
     return CanaryResult("paused" if blockers else "passed", len(results), minimum_runs, tuple(sorted(set(blockers))))
@@ -609,7 +609,7 @@ def run_offline_release_drill(root: Path = ROOT) -> dict[str, Any]:
         scenarios = {
             "normal_release": first["status"] == "candidate" and normal["status"] == "promoted",
             "shadow_critical_regression": canary_gate([{"critical_regressions": 1}, {"critical_regressions": 1}]).status == "paused",
-            "canary_failure_pause_and_stable_route": canary_gate([{"text_image_match": False}, {"text_image_match": False}]).status == "paused" and VersionRouter("6.4.0", "6.5.0").route("evening_content", stage="canary-1")["selected_version"] == "6.4.0",
+            "canary_failure_pause_and_stable_route": canary_gate([{"schema_passed": False}, {"schema_passed": False}]).status == "paused" and VersionRouter("6.4.0", "6.5.0").route("evening_content", stage="canary-1")["selected_version"] == "6.4.0",
             "application_rollback_preserves_outputs": second["status"] == "candidate" and rolled_back["status"] == "rolled_back" and marker.read_text(encoding="utf-8") == "preserve\n",
             "irreversible_migration_blocked": migration["status"] == "blocked" and not migration["destructive_executed"],
             "deployment_drift_detectable": drift["status"] == "blocked" and bool(drift.get("mismatches")),

@@ -9,7 +9,6 @@ import json
 import evals.phoenix_adapter as phoenix_adapter
 from build_daily_market_pack import _build_offline_evaluation_case
 from production_preflight import evaluate_preflight
-from image_renderer import render_image_pack, validate_image_pack
 from delivery_gate import EmailDeliveryAdapter, WebhookDeliveryAdapter, authorize_delivery
 from production_canary import validate_canary
 from deliver_run import deliver_run
@@ -83,7 +82,6 @@ def test_production_preflight_fails_closed_when_delivery_capabilities_are_missin
         "delivery_policy_enabled",
         "production_update_policy_enabled",
         "publish_adapter_available",
-        "image_pipeline_available",
         "production_canary_ready",
     }
 
@@ -104,7 +102,7 @@ def test_production_preflight_accepts_completed_shadow_artifact_when_capabilitie
     )
     monkeypatch.setenv("DELIVERY_WEBHOOK_URL", "https://example.invalid/publish")
     (tmp_path / "config" / "tool_routing_policy.json").write_text(
-        json.dumps({"tools": {"publish": {"enabled": True}, "generate_images": {"enabled": True, "supported_tasks": ["image_generation"]}}}),
+        json.dumps({"tools": {"publish": {"enabled": True}}}),
         encoding="utf-8",
     )
     (tmp_path / "reports" / "canary_self_healing_report.json").write_text(
@@ -116,7 +114,7 @@ def test_production_preflight_accepts_completed_shadow_artifact_when_capabilitie
         encoding="utf-8",
     )
     (tmp_path / "logs" / "shadow" / run_id / "run_manifest.json").write_text(
-        json.dumps({"qa_status": "pass", "mode": "image", "image_qa_status": "pass"}),
+        json.dumps({"qa_status": "pass", "mode": "text"}),
         encoding="utf-8",
     )
 
@@ -124,31 +122,6 @@ def test_production_preflight_accepts_completed_shadow_artifact_when_capabilitie
 
     assert report["ready"] is True
     assert report["blockers"] == []
-
-
-def test_image_renderer_and_qa_produce_a_valid_svg_pack(tmp_path: Path) -> None:
-    content_path = tmp_path / "market_content.json"
-    content_path.write_text(
-        json.dumps(
-            {
-                "date": "2026-08-02",
-                "edition": "evening_premarket_watch",
-                "summary": "市场数据暂缺",
-                "key_points": ["等待下一交易时段确认"],
-                "risk_factors": ["数据不足"],
-                "major_indexes": [],
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-
-    rendered = render_image_pack(content_path, tmp_path / "images", "market_20260802_1901")
-    qa = validate_image_pack(Path(rendered["path"]), content_path, "market_20260802_1901")
-
-    assert rendered["status"] == "pass"
-    assert qa["status"] == "pass"
-    assert {item["name"] for item in qa["checks"]} == {"dimensions", "content_markers"}
 
 
 def test_delivery_authorization_fails_closed_without_approval() -> None:
@@ -243,7 +216,7 @@ def test_production_canary_requires_real_receipt(tmp_path: Path, monkeypatch) ->
         json.dumps({"failed_step": None}), encoding="utf-8"
     )
     (tmp_path / "logs" / "shadow" / run_id / "run_manifest.json").write_text(
-        json.dumps({"mode": "image", "image_qa_status": "pass", "content_hash": "abc"}), encoding="utf-8"
+        json.dumps({"mode": "text", "content_hash": "abc"}), encoding="utf-8"
     )
     monkeypatch.setenv("DELIVERY_WEBHOOK_URL", "https://example.invalid/publish")
 
@@ -279,7 +252,7 @@ def test_golden_dataset_has_required_categories() -> None:
         "ollama_output_anomaly": 5,
         "gemini_fallback": 5,
         "market_data_missing": 5,
-        "image_qa_renderer_failure": 5,
+        "renderer_failure": 5,
     }
 
 

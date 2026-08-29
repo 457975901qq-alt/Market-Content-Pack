@@ -7,14 +7,12 @@
   "graceful_shutdown_seconds": 30,
   "jobs": {
     "morning_content": {"edition": "morning_close_review", "session": "morning", "scheduled_local_time": "06:30", "priority": 100, "grace_seconds": 7200},
-    "morning_images": {"edition": "morning_close_review", "session": "morning", "scheduled_local_time": "06:40", "priority": 90, "depends_on": "morning_content", "grace_seconds": 21600},
-    "evening_content": {"edition": "evening_premarket_watch", "session": "evening", "scheduled_local_time": "17:30", "priority": 100, "grace_seconds": 18000},
-    "evening_images": {"edition": "evening_premarket_watch", "session": "evening", "scheduled_local_time": "18:40", "priority": 90, "depends_on": "evening_content", "grace_seconds": 18000}
+    "evening_content": {"edition": "evening_premarket_watch", "session": "evening", "scheduled_local_time": "17:30", "priority": 100, "grace_seconds": 18000}
   },
   "misfire": {"cross_date_catchup_enabled": false},
   "retry": {"max_task_attempts": 3, "initial_delay_seconds": 60, "multiplier": 2, "maximum_delay_seconds": 900, "jitter_enabled": false},
   "non_retryable_error_codes": [
-    "INPUT_DATE_MISMATCH", "INPUT_SESSION_MISMATCH", "CROSS_VALIDATION_CONFLICT", "TEXT_IMAGE_MISMATCH",
+    "INPUT_DATE_MISMATCH", "INPUT_SESSION_MISMATCH", "CROSS_VALIDATION_CONFLICT",
     "INVALID_SCHEMA_VERSION", "GOLD_INSTRUMENT_MISMATCH", "SECRET_EXPOSURE_DETECTED", "P0_NOT_BLOCKED",
     "DEPENDENCY_FAILED", "CROSS_DATE_CATCHUP_BLOCKED", "DEPENDENCY_WINDOW_EXPIRED"
   ]

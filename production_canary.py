@@ -26,7 +26,6 @@ def validate_canary(root: Path, run_id: str, receipt: dict[str, Any] | None = No
     adapter = build_delivery_adapter(_read_json(root / "config" / "delivery_policy.json"))
     checks = {
         "shadow_completed": bool(state) and not state.get("failed_step"),
-        "image_qa_passed": manifest.get("mode") == "image" and manifest.get("image_qa_status") == "pass",
         "adapter_configured": adapter.health().get("status") == "ready",
         "receipt_present": isinstance(receipt, dict),
         "receipt_matches_run": isinstance(receipt, dict) and receipt.get("run_id") == run_id,

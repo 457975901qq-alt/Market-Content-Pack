@@ -41,14 +41,7 @@ def deliver_run(root: Path, run_id: str, approval: dict[str, Any], confirm: bool
     if not content_path.is_file():
         return {"status": "blocked", "reason": "content_artifact_missing", "run_id": run_id}
     attachments: list[str] = []
-    if mode == "image":
-        if manifest.get("image_qa_status") != "pass":
-            return {"status": "blocked", "reason": "image_qa_not_passed", "run_id": run_id}
-        image_path = output_root / "images" / "market_content.svg"
-        if not image_path.is_file():
-            return {"status": "blocked", "reason": "image_artifact_missing", "run_id": run_id}
-        attachments = [str(image_path)]
-    elif mode != "text":
+    if mode != "text":
         return {"status": "blocked", "reason": f"unsupported_output_mode:{mode}", "run_id": run_id}
 
     evaluation_policy = _read_json(root / "config" / "evaluation_policy.json")

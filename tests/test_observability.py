@@ -17,7 +17,7 @@ def _context(run_id: str = "market_20260805_1830_ab12") -> RunContext:
         scheduled_at=now,
         started_at=now,
         prompt_version="evening_premarket_watch_v2",
-        renderer_version="svg_renderer_v1",
+        renderer_version="text_only_v1",
         model_name="rule_template",
     )
 

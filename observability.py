@@ -45,8 +45,6 @@ CORE_STAGES = (
     "schema_validation",
     "cross_validation",
     "reviewer_validation",
-    "image_rendering",
-    "image_qa",
     "delivery",
 )
 
@@ -82,14 +80,12 @@ P0_CODES = {
     "INPUT_DATE_MISMATCH",
     "INPUT_SESSION_MISMATCH",
     "CROSS_VALIDATION_CONFLICT",
-    "TEXT_IMAGE_MISMATCH",
 }
 P1_CODES = {
     "MODEL_INVALID_JSON",
     "MODEL_TIMEOUT",
     "REVIEW_REJECTED",
     "RENDERER_NOT_REGISTERED",
-    "IMAGE_QA_FAILED",
     "DELIVERY_FAILED",
 }
 
@@ -150,10 +146,6 @@ def stable_error_code(error: Any = None, stage: str | None = None) -> str:
         return "INPUT_SESSION_MISMATCH"
     if "conflict" in combined or "cross_validation" in combined:
         return "CROSS_VALIDATION_CONFLICT"
-    if "text_image" in combined or "content_markers" in combined:
-        return "TEXT_IMAGE_MISMATCH"
-    if "image_qa" in combined:
-        return "IMAGE_QA_FAILED"
     if "renderer_not_registered" in combined or "rendering_error" in combined:
         return "RENDERER_NOT_REGISTERED"
     if "review" in combined and ("reject" in combined or "gate" in combined or "failed" in combined):
@@ -173,7 +165,7 @@ def stable_error_code(error: Any = None, stage: str | None = None) -> str:
     if raw == "market_data_missing":
         return "SOURCE_EMPTY"
     if raw == "quality_gate_failed":
-        return "IMAGE_QA_FAILED" if stage == "image_qa" else "MODEL_SCHEMA_FAILURE"
+        return "MODEL_SCHEMA_FAILURE"
     return raw.upper() if raw and raw.replace("_", "").isalnum() else "UNKNOWN_ERROR"
 
 
@@ -353,9 +345,6 @@ class RunObserver:
         source_status = self._read_json(self.output_root / "market_sources" / "source_status.json")
         source_count = int(source_status.get("source_count") or 0)
         source_failure_count = sum(1 for item in (source_status.get("sources") or {}).values() if isinstance(item, dict) and str(item.get("status", "")).lower() in {"failed", "unavailable", "error"})
-        image_qa = self._read_json(self.log_root / "image_qa.json")
-        if not image_qa:
-            image_qa = self._read_json(self.output_root / "logs" / "image_qa.json")
         errors: list[dict[str, Any]] = []
         error_codes: list[str] = []
         for step_name, step in (state.get("steps") or {}).items():
@@ -371,11 +360,6 @@ class RunObserver:
         status = "success" if result == 0 and not state.get("failed_step") else "failed"
         completed_steps = [name for name, item in (state.get("steps") or {}).items() if isinstance(item, dict) and item.get("status") == "success"]
         last_completed = completed_steps[-1] if completed_steps else None
-        image_status = image_qa.get("status") if image_qa else None
-        text_image_match = None
-        if image_qa:
-            marker = next((item for item in image_qa.get("checks", []) if item.get("name") == "content_markers"), None)
-            text_image_match = marker.get("status") == "pass" if isinstance(marker, dict) else None
         metrics = {
             "pipeline_run_total": 1,
             "pipeline_success_total": 1 if status == "success" else 0,
@@ -391,8 +375,6 @@ class RunObserver:
             "schema_validation_failure_total": error_codes.count("MODEL_SCHEMA_FAILURE"),
             "cross_validation_conflict_total": error_codes.count("CROSS_VALIDATION_CONFLICT"),
             "review_failure_total": error_codes.count("REVIEW_REJECTED"),
-            "image_qa_failure_total": error_codes.count("IMAGE_QA_FAILED"),
-            "text_image_mismatch_total": error_codes.count("TEXT_IMAGE_MISMATCH"),
             "stale_input_total": error_codes.count("INPUT_DATE_MISMATCH"),
             "wrong_session_total": error_codes.count("INPUT_SESSION_MISMATCH"),
             "delivery_success_total": sum(1 for event in events if event.get("stage") == "delivery" and event.get("status") == "success"),
@@ -419,8 +401,6 @@ class RunObserver:
             "fallback_count": fallback_count,
             "checkpoint_resumed": self.context.checkpoint_resumed,
             "content_review_passed": (state.get("steps", {}).get("reviewer_gate", {}).get("status") == "success"),
-            "image_qa_passed": image_status == "pass" if image_status is not None else None,
-            "text_image_match": text_image_match,
             "delivery_enabled": False,
             "delivery_status": "skipped",
             "errors": errors,

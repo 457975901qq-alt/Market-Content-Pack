@@ -210,7 +210,7 @@ def build_production_bindings(context: BusinessContext, callbacks: ProductionCal
 class ProductionToolExecutor:
     """Policy-enforced production adapter from AgentAction to FunctionCall."""
 
-    BLOCKED = {"deliver", "canary_deliver", "publish_content", "shell", "exec_shell", "generate_images"}
+    BLOCKED = {"deliver", "canary_deliver", "publish_content", "shell", "exec_shell"}
 
     def __init__(self, bindings: dict[str, Callable[[Any], dict[str, Any]]], *, defaults: dict[str, Any], max_calls: int = 30, max_calls_per_step: int = 5, event_hook: Callable[[AgentAction, ToolObservation], None] | None = None, recovery_handler: Callable[[FunctionCall, Any], dict[str, Any] | None] | None = None) -> None:
         self.defaults = defaults

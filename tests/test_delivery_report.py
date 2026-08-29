@@ -29,7 +29,7 @@ def _status(**kwargs) -> dict:
 
 
 def test_rich_report_uses_compact_status_cards_and_folded_technical_section() -> None:
-    report = render_delivery_report(_content(), _manifest(), _status(image_status="已关闭", publish_status="已关闭"))
+    report = render_delivery_report(_content(), _manifest(), _status(publish_status="已关闭"))
     assert "每日市场早盘报告" in report
     assert "2026-08-05 · 早盘" in report
     assert "QA 已通过" in report and "49 个来源" in report and "未发布" in report
@@ -42,9 +42,9 @@ def test_rich_report_uses_compact_status_cards_and_folded_technical_section() ->
     assert report.index("market_content.json") > report.index("运行与技术信息")
 
 
-def test_image_generation_state_is_separate_from_publish_state() -> None:
-    report = render_delivery_report(_content(), _manifest(mode="image"), _status(image_status="已开启", publish_status="已关闭"))
-    assert "图片生成" in report and "已开启" in report
+def test_media_generation_state_is_not_rendered() -> None:
+    report = render_delivery_report(_content(), _manifest(mode="text"), _status(publish_status="已关闭"))
+    assert "图片生成" not in report
     assert "外部发布功能" in report and "已关闭" in report
 
 
@@ -222,9 +222,9 @@ def test_html_uses_relative_clickable_file_links() -> None:
 
 
 def test_runtime_switches_are_independent_from_delivery_result() -> None:
-    status = _status(image_generation_enabled=False, external_publish_enabled=True, delivered=False)
-    report = render_delivery_report_html(_content(), _manifest(mode="image"), status)
-    assert "图片生成" in report and "已关闭" in report
+    status = _status(external_publish_enabled=True, delivered=False)
+    report = render_delivery_report_html(_content(), _manifest(mode="text"), status)
+    assert "图片生成" not in report
     assert "外部发布功能" in report and "已开启" in report
     assert "交付结果" in report and "未执行" in report
 

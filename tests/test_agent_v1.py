@@ -151,11 +151,10 @@ def test_checkpoint_resume(tmp_path: Path) -> None:
     assert restored.state_hash == state.state_hash
 
 
-def test_external_publish_still_blocked_and_image_policy_off(tmp_path: Path) -> None:
+def test_external_publish_still_blocked_and_media_policy_removed(tmp_path: Path) -> None:
     executor = ToolExecutor(local_adapters={"deliver": lambda args: {"sent": True}})
     blocked = executor.execute(AgentAction(action_id="deliver_1", tool_name="deliver"))
     assert blocked["success"] is False
     assert blocked["error_type"] == "tool_blocked"
     policy = RecoveryPolicy.from_config(Path("config/self_healing_policy.json"))
     assert policy.allow_external_publish is False
-    assert policy.allow_image_generation is False

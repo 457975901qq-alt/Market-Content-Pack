@@ -10,16 +10,15 @@
   "candidate_job_routes": {
     "shadow": [],
     "canary-1": ["morning_content"],
-    "canary-2": ["morning_content", "morning_images"],
-    "canary-3": ["morning_content", "morning_images", "evening_content", "evening_images"],
-    "active": ["morning_content", "morning_images", "evening_content", "evening_images"]
+    "canary-2": ["morning_content"],
+    "canary-3": ["morning_content", "evening_content"],
+    "active": ["morning_content", "evening_content"]
   },
   "auto_pause": {
     "p0": true,
     "wrong_session": true,
     "stale_input": true,
     "schema_failure": true,
-    "text_image_mismatch": true,
     "checkpoint_incompatible": true
   }
 }

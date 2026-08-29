@@ -60,8 +60,6 @@ class QualityStore:
                     fact_match_rate REAL,
                     schema_passed INTEGER,
                     reviewer_passed INTEGER,
-                    image_qa_passed INTEGER,
-                    text_image_match INTEGER,
                     retry_count INTEGER NOT NULL DEFAULT 0,
                     fallback_count INTEGER NOT NULL DEFAULT 0,
                     error_code TEXT,
@@ -74,8 +72,6 @@ class QualityStore:
                     success_rate REAL,
                     schema_pass_rate REAL,
                     reviewer_pass_rate REAL,
-                    image_qa_pass_rate REAL,
-                    text_image_match_rate REAL,
                     p0_count INTEGER NOT NULL DEFAULT 0,
                     p1_count INTEGER NOT NULL DEFAULT 0,
                     retry_rate REAL,
@@ -116,15 +112,14 @@ class QualityStore:
                 """INSERT OR REPLACE INTO regression_case_results
                 (regression_run_id, case_id, status, score, duration_seconds, critical_count,
                  high_count, medium_count, low_count, fact_match_rate, schema_passed,
-                 reviewer_passed, image_qa_passed, text_image_match, retry_count,
+                 reviewer_passed, retry_count,
                  fallback_count, error_code, payload_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     regression_run_id, result["case_id"], result["status"], result.get("score"),
                     result.get("duration_seconds"), counts["CRITICAL"], counts["HIGH"], counts["MEDIUM"],
                     counts["LOW"], result.get("fact_match_rate"), _bool_int(result.get("schema_passed")),
-                    _bool_int(result.get("reviewer_passed")), _bool_int(result.get("image_qa_passed")),
-                    _bool_int(result.get("text_image_match")), int(result.get("retry_count") or 0),
+                    _bool_int(result.get("reviewer_passed")), int(result.get("retry_count") or 0),
                     int(result.get("fallback_count") or 0), result.get("error_code"),
                     json.dumps(result, ensure_ascii=False),
                 ),
@@ -135,14 +130,13 @@ class QualityStore:
             db.execute(
                 """INSERT OR REPLACE INTO quality_daily_summary
                 (date, total_runs, success_rate, schema_pass_rate, reviewer_pass_rate,
-                 image_qa_pass_rate, text_image_match_rate, p0_count, p1_count,
+                 p0_count, p1_count,
                  retry_rate, fallback_rate, average_duration, p95_duration,
                  average_quality_score, sample_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     payload["date"], payload["total_runs"], payload.get("success_rate"),
                     payload.get("schema_pass_rate"), payload.get("reviewer_pass_rate"),
-                    payload.get("image_qa_pass_rate"), payload.get("text_image_match_rate"),
                     payload.get("p0_count", 0), payload.get("p1_count", 0), payload.get("retry_rate"),
                     payload.get("fallback_rate"), payload.get("average_duration"),
                     payload.get("p95_duration"), payload.get("average_quality_score"),

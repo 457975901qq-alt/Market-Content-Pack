@@ -58,7 +58,6 @@ def configuration_report(
         "provider": selected,
         "required_environment": required,
         "missing_environment": missing,
-        "image_generation_allowed": bool(policy.get("allow_image_generation", False)),
         "step_timeout_seconds": int(policy.get("step_timeout_seconds", 600)),
         "source_fallback_enabled": bool(policy.get("source_fallback_enabled", True)),
         "sensitive_values_logged": False,

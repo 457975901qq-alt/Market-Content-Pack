@@ -197,11 +197,9 @@ def test_production_market_action_passes_cutoff_to_existing_market_tool(monkeypa
     assert result["result"]["requested_as_of"] == "2026-08-20T08:30:00+00:00"
 
 
-def test_production_executor_denies_image_action() -> None:
+def test_production_executor_has_no_media_generation_action() -> None:
     executor = ProductionToolExecutor(_bindings(), defaults=_defaults())
-    result = executor.execute(AgentAction(action_id="image_1", tool_name="generate_images"))
-    assert result["success"] is False
-    assert result["error_type"] == "tool_blocked"
+    assert "generate_images" not in executor.BLOCKED
 
 
 def test_production_executor_routes_failures_to_bounded_recovery() -> None:

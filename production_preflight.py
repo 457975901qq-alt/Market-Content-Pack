@@ -32,7 +32,6 @@ def evaluate_preflight(root: Path, run_id: str | None = None) -> dict[str, Any]:
     checks: dict[str, dict[str, Any]] = {}
 
     evaluation_policy = _read_json(root / "config" / "evaluation_policy.json")
-    runtime_policy = _read_json(root / "config" / "runtime_policy.json")
     routing_policy = _read_json(root / "config" / "tool_routing_policy.json")
     delivery_policy = _read_json(root / "config" / "delivery_policy.json")
     tools = routing_policy.get("tools", {}) if isinstance(routing_policy.get("tools"), dict) else {}
@@ -86,25 +85,6 @@ def evaluate_preflight(root: Path, run_id: str | None = None) -> dict[str, Any]:
         checks,
     )
 
-    # A missing runtime policy is treated as the legacy image product. The
-    # explicit project policy disables this requirement for current text-only
-    # delivery.
-    image_required = bool(runtime_policy.get("allow_image_generation", True))
-    image_tools = []
-    for name, definition in tools.items():
-        if not isinstance(definition, dict):
-            continue
-        task_names = {str(item) for item in definition.get("supported_tasks", [])}
-        if name in {"generate_images", "validate_images", "image_qa", "image_renderer"} or "image_generation" in task_names or "image_qa" in task_names:
-            image_tools.append(name)
-    _check(
-        "image_pipeline_available",
-        (not image_required) or bool(image_tools),
-        "text-only delivery is configured; image pipeline is not required" if not image_required else "image generation and image QA adapters must be registered for the image delivery product",
-        blockers,
-        checks,
-    )
-
     canary_report = _read_json(root / "reports" / "production_canary_report.json")
     if not canary_report:
         canary_report = _read_json(root / "reports" / "canary_self_healing_report.json")
@@ -134,13 +114,6 @@ def evaluate_preflight(root: Path, run_id: str | None = None) -> dict[str, Any]:
             "shadow_evaluation_passed",
             manifest.get("qa_status") == "pass" and bool(state) and "offline_evaluation" in state.get("completed_steps", []),
             f"shadow run {run_id} must pass QA and offline evaluation",
-            blockers,
-            checks,
-        )
-        _check(
-            "shadow_image_pipeline_passed",
-            manifest.get("mode") == "image" and manifest.get("image_qa_status") == "pass",
-            f"shadow run {run_id} must run with --enable-images and pass image QA",
             blockers,
             checks,
         )

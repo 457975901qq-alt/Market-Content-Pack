@@ -1,6 +1,5 @@
 {
   "step_timeout_seconds": 600,
-  "allow_image_generation": false,
   "source_fallback_enabled": true,
   "monitoring": {
     "pipeline_timeout_seconds": 600,

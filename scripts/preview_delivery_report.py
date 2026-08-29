@@ -50,7 +50,6 @@ def _build_status(root: Path, manifest: dict) -> dict:
         "run_id": manifest.get("run_id"),
         "qa_status": manifest.get("qa_status"),
         "delivered": manifest.get("delivered", False),
-        "image_generation_enabled": manifest.get("image_generation_enabled", manifest.get("mode") == "image"),
         "external_publish_enabled": manifest.get("external_publish_enabled", manifest.get("external_publish") not in {None, "removed", "disabled", "off"}),
         "output_root": str(root.resolve()),
         "content_path": str((root / "market_content/market_content.json").resolve()),

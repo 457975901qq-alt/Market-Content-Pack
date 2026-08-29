@@ -13,9 +13,9 @@ from tool_router import ToolRouter
 from build_daily_market_pack import run_command
 
 
-def test_runtime_policy_keeps_images_disabled_by_default() -> None:
+def test_runtime_policy_has_no_media_generation_switch() -> None:
     policy = load_runtime_policy()
-    assert policy["allow_image_generation"] is False
+    assert "allow_image_generation" not in policy
     assert policy["step_timeout_seconds"] > 0
 
 

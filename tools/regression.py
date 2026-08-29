@@ -45,7 +45,7 @@ HARD_FACT_FIELDS = (
     "gold_instrument", "gold_unit", "gold_value", "gold_disclosure",
 )
 STRUCTURE_FIELDS = ("structure",)
-GATE_FIELDS = ("schema_passed", "reviewer_passed", "image_qa_passed", "text_image_match", "p0_blocked", "delivery_attempted")
+GATE_FIELDS = ("schema_passed", "reviewer_passed", "p0_blocked", "delivery_attempted")
 
 
 def _read(path: Path, default: Any = None) -> Any:
@@ -134,8 +134,8 @@ def _compare_normal(case: dict[str, Any], baseline: dict[str, Any], candidate: d
         if field not in expected:
             continue
         if candidate.get(field) != expected.get(field):
-            severity = "CRITICAL" if field in {"text_image_match", "p0_blocked", "delivery_attempted"} else "HIGH"
-            code = "TEXT_IMAGE_MISMATCH" if field == "text_image_match" else "QUALITY_GATE_CHANGED"
+            severity = "CRITICAL" if field in {"p0_blocked", "delivery_attempted"} else "HIGH"
+            code = "QUALITY_GATE_CHANGED"
             _add_regression(regressions, severity, code, field, expected.get(field), candidate.get(field), "quality gate changed")
     if candidate.get("status") != expected.get("status"):
         _add_regression(regressions, "HIGH", "NORMAL_CASE_FAILED", "status", expected.get("status"), candidate.get("status"), "normal case no longer passes")
@@ -185,11 +185,9 @@ def score_case(case: dict[str, Any], root: Path = ROOT, candidate_override: dict
         expected = {"status": "failed", "error_code": case.get("expected_error_code")}
     schema_passed = candidate.get("schema_passed")
     reviewer_passed = candidate.get("reviewer_passed")
-    image_qa_passed = candidate.get("image_qa_passed")
-    text_image_match = candidate.get("text_image_match")
     if case.get("kind") == "normal":
         structure_score = 1.0 if candidate.get("structure") == expected.get("structure") and schema_passed is True else 0.0
-        review_values = [value for value in (reviewer_passed, image_qa_passed, text_image_match) if isinstance(value, bool)]
+        review_values = [value for value in (reviewer_passed,) if isinstance(value, bool)]
         review_score = sum(review_values) / len(review_values) if review_values else 0.0
         source_score = min(1.0, float(candidate.get("source_count", 0)) / max(1.0, float(expected.get("source_count", 1))))
         expected_duration = float(expected.get("pipeline_duration_seconds") or 1)
@@ -212,8 +210,7 @@ def score_case(case: dict[str, Any], root: Path = ROOT, candidate_override: dict
         "status": status, "score": score, "hard_gate_passed": hard_gate,
         "dimensions": dimensions, "regressions": regressions,
         "fact_match_rate": fact_rate, "schema_passed": schema_passed,
-        "reviewer_passed": reviewer_passed, "image_qa_passed": image_qa_passed,
-        "text_image_match": text_image_match, "retry_count": candidate.get("retry_count", 0),
+        "reviewer_passed": reviewer_passed, "retry_count": candidate.get("retry_count", 0),
         "fallback_count": candidate.get("fallback_count", 0), "duration_seconds": candidate.get("pipeline_duration_seconds"),
         "error_code": candidate.get("error_code"), "evaluated_at": finished.isoformat(),
         "evaluation_duration_seconds": round((finished - started).total_seconds(), 6),
@@ -229,7 +226,7 @@ def build_release_gate(case_results: list[dict[str, Any]], baseline_version: str
     policy = _policy(root).get("quality_gate") or {}
     critical = sum(sum(1 for item in result.get("regressions", []) if item.get("severity") == "CRITICAL") for result in case_results)
     high = sum(sum(1 for item in result.get("regressions", []) if item.get("severity") == "HIGH") for result in case_results)
-    p0 = sum(1 for result in case_results for item in result.get("regressions", []) if item.get("code") in {"HARD_FACT_CHANGED", "INPUT_DATE_MISMATCH", "INPUT_SESSION_MISMATCH", "TEXT_IMAGE_MISMATCH", "P0_DELIVERY_NOT_BLOCKED", "P0_NOT_BLOCKED", "GOLD_INSTRUMENT_ERROR"})
+    p0 = sum(1 for result in case_results for item in result.get("regressions", []) if item.get("code") in {"HARD_FACT_CHANGED", "INPUT_DATE_MISMATCH", "INPUT_SESSION_MISMATCH", "P0_DELIVERY_NOT_BLOCKED", "P0_NOT_BLOCKED", "GOLD_INSTRUMENT_ERROR"})
     gold_errors = sum(1 for result in case_results for item in result.get("regressions", []) if item.get("code") == "GOLD_INSTRUMENT_ERROR")
     wrong_session = sum(1 for result in case_results for item in result.get("regressions", []) if item.get("code") == "INPUT_SESSION_MISMATCH")
     stale_input = sum(1 for result in case_results for item in result.get("regressions", []) if item.get("code") in {"INPUT_DATE_MISMATCH", "STALE_INPUT"})
@@ -242,8 +239,6 @@ def build_release_gate(case_results: list[dict[str, Any]], baseline_version: str
     fact_rate = (round(sum(fact_values) / len(fact_values), 4), len(fact_values)) if fact_values else (None, 0)
     schema_rate, schema_n = ratio("schema_passed")
     reviewer_rate, reviewer_n = ratio("reviewer_passed")
-    image_rate, image_n = ratio("image_qa_passed")
-    text_rate, text_n = ratio("text_image_match")
     reasons: list[dict[str, Any]] = []
     def require(rule: str, expected: Any, actual: Any, condition: bool) -> None:
         if condition:
@@ -258,15 +253,13 @@ def build_release_gate(case_results: list[dict[str, Any]], baseline_version: str
     require("minimum_fact_match_rate", policy.get("minimum_fact_match_rate", 1.0), fact_rate[0], fact_rate[0] is not None and fact_rate[0] < float(policy.get("minimum_fact_match_rate", 1.0)))
     require("minimum_schema_pass_rate", policy.get("minimum_schema_pass_rate", 1.0), schema_rate, schema_rate is not None and schema_rate < float(policy.get("minimum_schema_pass_rate", 1.0)))
     require("minimum_reviewer_pass_rate", policy.get("minimum_reviewer_pass_rate", 0.95), reviewer_rate, reviewer_rate is not None and reviewer_rate < float(policy.get("minimum_reviewer_pass_rate", 0.95)))
-    require("minimum_image_qa_pass_rate", policy.get("minimum_image_qa_pass_rate", 0.95), image_rate, image_rate is not None and image_rate < float(policy.get("minimum_image_qa_pass_rate", 0.95)))
-    require("minimum_text_image_match_rate", policy.get("minimum_text_image_match_rate", 1.0), text_rate, text_rate is not None and text_rate < float(policy.get("minimum_text_image_match_rate", 1.0)))
-    insufficient = len(case_results) < MIN_TREND_SAMPLE or any(count and count < MIN_TREND_SAMPLE for count in (fact_rate[1], schema_n, reviewer_n, image_n, text_n) if count)
+    insufficient = len(case_results) < MIN_TREND_SAMPLE or any(count and count < MIN_TREND_SAMPLE for count in (fact_rate[1], schema_n, reviewer_n) if count)
     status = "blocked" if reasons else ("warning" if insufficient else "passed")
     return {
         "status": status, "candidate_version": candidate_version, "baseline_version": baseline_version,
         "total_cases": len(case_results), "passed_cases": passed, "failed_cases": len(case_results) - passed,
         "score": round(statistics.mean(scores), 2) if scores else None, "hard_gate_passed": not any(not result.get("hard_gate_passed") for result in case_results),
-        "sample_size": {"total": len(case_results), "fact_match": fact_rate[1], "schema": schema_n, "reviewer": reviewer_n, "image_qa": image_n, "text_image_match": text_n},
+        "sample_size": {"total": len(case_results), "fact_match": fact_rate[1], "schema": schema_n, "reviewer": reviewer_n},
         "insufficient_sample_size": insufficient, "critical_regressions": critical, "high_regressions": high,
         "p0_errors": p0, "gold_instrument_errors": gold_errors, "wrong_session_errors": wrong_session,
         "stale_input_errors": stale_input, "reasons": reasons,
@@ -399,8 +392,7 @@ def load_history(root: Path = ROOT) -> list[dict[str, Any]]:
                 "run_id": run_id, "started_at": started, "finished_at": manifest.get("finished_at"),
                 "status": "success" if manifest.get("qa_status") == "pass" else "failed",
                 "schema_passed": manifest.get("qa_status") == "pass", "reviewer_passed": reviewer,
-                "image_qa_passed": manifest.get("image_qa_status") == "pass" if manifest.get("image_qa_status") is not None else None,
-                "text_image_match": None, "retry_count": 0, "fallback_count": int(bool(manifest.get("fallback_used"))),
+                "retry_count": 0, "fallback_count": int(bool(manifest.get("fallback_used"))),
                 "timeout_count": 0, "source_count": (manifest.get("source_status") or {}).get("source_count"),
                 "source_failure_count": None, "delivery_enabled": False, "delivery_status": "skipped",
                 "alerts": [], "errors": [], "_source": str(path),
@@ -421,7 +413,7 @@ def load_history(root: Path = ROOT) -> list[dict[str, Any]]:
             record["schema_passed"] = record.get("status") == "success"
         if "reviewer_passed" not in record and "content_review_passed" in record:
             record["reviewer_passed"] = record.get("content_review_passed")
-        p0 = sum(1 for item in alerts if item.get("level") == "P0") + sum(1 for item in errors if str(item.get("error_code", "")).startswith(("INPUT_", "CROSS_", "TEXT_IMAGE")))
+        p0 = sum(1 for item in alerts if item.get("level") == "P0") + sum(1 for item in errors if str(item.get("error_code", "")).startswith(("INPUT_", "CROSS_")))
         p1 = sum(1 for item in alerts if item.get("level") == "P1")
         if "quality_score" not in record:
             record["quality_score"] = 100.0 if record.get("status") == "success" else 0.0
@@ -464,8 +456,6 @@ def _period_metric_details(records: list[dict[str, Any]], window_days: int | Non
         "run_failure_rate": [item.get("status") == "failed" for item in records],
         "schema_pass_rate": [item.get("schema_passed") for item in records],
         "reviewer_pass_rate": [item.get("reviewer_passed") for item in records],
-        "image_qa_pass_rate": [item.get("image_qa_passed") for item in records],
-        "text_image_match_rate": [item.get("text_image_match") for item in records],
         "retry_rate": [int(item.get("retry_count", 0)) > 0 for item in records],
         "fallback_rate": [int(item.get("fallback_count", 0)) > 0 for item in records],
         "timeout_rate": [int(item.get("timeout_count", 0)) > 0 for item in records],
@@ -492,8 +482,6 @@ def _period_metrics(records: list[dict[str, Any]]) -> dict[str, Any]:
         "success_rate": _rate([item.get("status") == "success" for item in records]),
         "schema_pass_rate": _rate([item.get("schema_passed") for item in records]),
         "reviewer_pass_rate": _rate([item.get("reviewer_passed") for item in records]),
-        "image_qa_pass_rate": _rate([item.get("image_qa_passed") for item in records]),
-        "text_image_match_rate": _rate([item.get("text_image_match") for item in records]),
         "fact_match_rate": _rate([item.get("fact_match_rate") == 1.0 if isinstance(item.get("fact_match_rate"), (int, float)) else None for item in records]),
         "required_field_coverage": _rate([item.get("schema_passed") for item in records]),
         "source_coverage_rate": round(source_covered / source_total, 4) if source_total else None,
@@ -549,7 +537,7 @@ def build_trend(root: Path = ROOT, days: int = 7) -> dict[str, Any]:
     previous = [item for item in records if previous_start.isoformat() <= item["date"] <= previous_end.isoformat()]
     metrics = _period_metrics(current)
     previous_metrics = _period_metrics(previous)
-    trend_fields = ("run_success_rate", "run_failure_rate", "schema_pass_rate", "reviewer_pass_rate", "image_qa_pass_rate", "text_image_match_rate", "average_quality_score", "average_duration", "p95_duration", "retry_rate", "fallback_rate")
+    trend_fields = ("run_success_rate", "run_failure_rate", "schema_pass_rate", "reviewer_pass_rate", "average_quality_score", "average_duration", "p95_duration", "retry_rate", "fallback_rate")
     trend = {field: _trend_status(metrics.get(field), previous_metrics.get(field), higher_is_better=field not in {"run_failure_rate", "average_duration", "p95_duration", "retry_rate", "fallback_rate"}) for field in trend_fields}
     insufficient = len(current) < MIN_TREND_SAMPLE
     comparison_available = any(value in {"improvement", "stable", "degradation"} for value in trend.values())
@@ -565,7 +553,7 @@ def build_trend(root: Path = ROOT, days: int = 7) -> dict[str, Any]:
     quality_root.mkdir(parents=True, exist_ok=True)
     _write(quality_root / f"quality_trend_{days}d.json", result)
     lines = [f"# Quality Trend {days}d", "", f"- Window：{result['start_date']} 至 {result['end_date']}", f"- Samples：{result['sample_count']}", f"- Status：**{result['status']}**", "", "| Metric | Current | Previous | Trend |", "|---|---:|---:|---|"]
-    for field in ("run_success_rate", "run_failure_rate", "schema_pass_rate", "reviewer_pass_rate", "image_qa_pass_rate", "text_image_match_rate", "average_quality_score", "average_duration", "p95_duration", "retry_rate", "fallback_rate"):
+    for field in ("run_success_rate", "run_failure_rate", "schema_pass_rate", "reviewer_pass_rate", "average_quality_score", "average_duration", "p95_duration", "retry_rate", "fallback_rate"):
         lines.append(f"| {field} | {metrics.get(field)} | {previous_metrics.get(field)} | {trend.get(field)} |")
     (quality_root / f"quality_trend_{days}d.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     store = QualityStore(root / "runtime" / "quality.sqlite3")

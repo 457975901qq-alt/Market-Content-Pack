@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from execution_planner import ExecutionPlanner
 from tool_router import ToolRouter
 
@@ -69,7 +71,7 @@ def test_planner_resume_preserves_success_and_marks_pending_replan() -> None:
     assert plan["resumed_from_plan"] is True
 
 
-def test_plan_is_text_only_and_has_no_image_tools() -> None:
+def test_plan_is_text_only_and_has_no_media_tools() -> None:
     router = ToolRouter(_health(ollama={"status": "healthy"}, gemini={"status": "healthy"}))
     plan = ExecutionPlanner(router).build(
         run_id="market_20260720_1202",
@@ -79,9 +81,9 @@ def test_plan_is_text_only_and_has_no_image_tools() -> None:
         text_only=True,
     )
     assert plan["text_only"] is True
-    assert "validate_images" not in plan["mandatory_gates"]
-    assert not any(item["step"] in {"generate_images", "validate_images"} for item in plan["steps"])
-    assert not any(item.get("task") == "image_generation" for item in router.decisions)
+    assert plan["mandatory_gates"]
+    assert all("image" not in json.dumps(item, ensure_ascii=False).lower() for item in plan["steps"])
+    assert all("image" not in json.dumps(item, ensure_ascii=False).lower() for item in router.decisions)
 
 
 def test_router_is_stable_for_same_health_snapshot() -> None:

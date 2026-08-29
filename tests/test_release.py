@@ -61,9 +61,9 @@ def test_prepare_builds_immutable_manifest_and_package_without_env_or_tests(tmp_
 
 def test_canary_gate_pauses_on_insufficient_data_and_quality_regression() -> None:
     assert canary_gate([]).status == "insufficient_data"
-    result = canary_gate([{"text_image_match": False}, {"text_image_match": True}])
+    result = canary_gate([{"schema_passed": False}, {"schema_passed": True}])
     assert result.status == "paused"
-    assert "TEXT_IMAGE_MISMATCH" in result.blockers
+    assert "SCHEMA_FAILURE" in result.blockers
 
 
 def test_router_routes_only_declared_jobs_to_candidate() -> None:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from scheduler import Scheduler, SchedulerStore, Worker, evaluate_checkpoint, load_scheduler_config, validate_dependency
+from scheduler import Scheduler, SchedulerStore, Worker, evaluate_checkpoint, load_scheduler_config
 
 
 TOKYO = datetime.now().astimezone().tzinfo
@@ -24,26 +24,14 @@ def make_scheduler(tmp_path: Path) -> Scheduler:
 def test_enqueue_is_idempotent_and_uses_fixed_tokyo_slots(tmp_path: Path) -> None:
     scheduler = make_scheduler(tmp_path)
     jobs = scheduler.enqueue_today(fixed("2026-08-06T05:00:00+09:00"))
-    assert len(jobs) == 4
+    assert len(jobs) == 2
     assert {item["logical_job_key"] for item in scheduler.store.list_jobs()} == {
-        "morning_content:2026-08-06:morning", "morning_images:2026-08-06:morning",
-        "evening_content:2026-08-06:evening", "evening_images:2026-08-06:evening",
+        "morning_content:2026-08-06:morning", "evening_content:2026-08-06:evening",
     }
     assert scheduler.store.get_by_key("evening_content:2026-08-06:evening")["scheduled_at"].startswith("2026-08-06T17:30")
     scheduler.enqueue_today(fixed("2026-08-06T05:01:00+09:00"))
-    assert len(scheduler.store.list_jobs()) == 4
-    assert scheduler.store.metrics()["duplicate_job_prevented_total"] == 4
-
-
-def test_dependency_waits_then_promotes(tmp_path: Path) -> None:
-    scheduler = make_scheduler(tmp_path)
-    scheduler.enqueue_today(fixed("2026-08-06T06:30:00+09:00"))
-    image = scheduler.store.get_by_key("morning_images:2026-08-06:morning")
-    assert image["status"] == "waiting_dependency"
-    with scheduler.store.transaction() as db:
-        db.execute("UPDATE scheduled_jobs SET status='succeeded' WHERE logical_job_key='morning_content:2026-08-06:morning'")
-    claimed = scheduler.store.claim("worker", fixed("2026-08-06T06:40:00+09:00"))
-    assert claimed and claimed["job_type"] == "morning_images"
+    assert len(scheduler.store.list_jobs()) == 2
+    assert scheduler.store.metrics()["duplicate_job_prevented_total"] == 2
 
 
 def test_atomic_claim_and_heartbeat_prevent_second_worker(tmp_path: Path) -> None:
@@ -92,11 +80,11 @@ def test_checkpoint_decision_rejects_input_and_restarts_renderer_changes() -> No
         {"run_id": "r", "target_date": "2026-08-06", "session": "evening", "renderer_version": "new"},
     )
     assert renderer.decision == "resume"
-    assert renderer.resume_from_stage == "image_rendering"
+    assert renderer.resume_from_stage == "delivery"
 
 
 def test_p0_checkpoint_is_blocked_from_delivery() -> None:
-    result = evaluate_checkpoint({"run_id": "r", "target_date": "2026-08-06", "session": "morning", "last_completed_stage": "image_qa", "p0_error": True}, {})
+    result = evaluate_checkpoint({"run_id": "r", "target_date": "2026-08-06", "session": "morning", "last_completed_stage": "content_generation", "p0_error": True}, {})
     assert result.decision == "blocked"
     assert result.resume_from_stage == "delivery"
 
@@ -147,26 +135,7 @@ def test_force_rerun_creates_new_run_without_overwriting_execution_history(tmp_p
     assert len(scheduler.store.executions(result["job_id"])) == 1
 
 
-def test_manual_image_trigger_has_time_window_and_session_safety(tmp_path: Path) -> None:
-    scheduler = make_scheduler(tmp_path)
-    with pytest.raises(ValueError, match="MANUAL_TRIGGER_WINDOW_BLOCKED"):
-        scheduler.trigger("morning_images", fixed("2026-08-06T05:59:00+09:00"))
-    morning = scheduler.trigger("morning_images", fixed("2026-08-06T10:00:00+09:00"))
-    assert morning["session"] == "morning"
-    with pytest.raises(ValueError, match="INPUT_SESSION_MISMATCH"):
-        scheduler.trigger("morning_images", fixed("2026-08-06T19:00:00+09:00"))
-
-
-def test_dependency_validation_rejects_wrong_edition_and_accepts_hash(tmp_path: Path) -> None:
-    content_path = tmp_path / "content.json"
-    content_path.write_text(json.dumps({"edition": "morning_close_review", "date": "2026-08-06", "scheduled_local_time": "06:30"}), encoding="utf-8")
+def test_scheduler_has_no_media_jobs(tmp_path: Path) -> None:
     scheduler = make_scheduler(tmp_path)
     scheduler.enqueue_today(fixed("2026-08-06T06:30:00+09:00"))
-    scheduler.enqueue_today(fixed("2026-08-06T06:31:00+09:00"))
-    content = scheduler.store.get_by_key("morning_content:2026-08-06:morning")
-    image = scheduler.store.get_by_key("morning_images:2026-08-06:morning")
-    content["status"] = "succeeded"
-    content["payload"] = {"content_path": str(content_path), "content_hash": __import__("hashlib").sha256(content_path.read_bytes()).hexdigest(), "input_content_id": "content.json"}
-    assert validate_dependency(image, content, tmp_path)["valid"] is True
-    content["payload"]["content_hash"] = "changed"
-    assert validate_dependency(image, content, tmp_path)["error_code"] == "INPUT_HASH_CHANGED"
+    assert all("images" not in item["job_type"] for item in scheduler.store.list_jobs())

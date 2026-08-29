@@ -317,7 +317,7 @@ def build_readiness_evidence(
         "qa": "pass" if qa.get("status") == "pass" else "fail",
         "reviewer_gate": "pass" if review_ok else "not_run",
         "final_quality_gate": "pass" if final_ok else "fail",
-        "renderer": "not_applicable" if state.get("text_only", True) else ("pass" if _read_json(logs / "image_qa.json").get("status") == "pass" else "fail"),
+        "renderer": "text_only",
         "release_policy": "pass" if (root / "config" / "release_policy.json").exists() else "fail",
         "delivery_preflight": "not_run" if run_mode != RunMode.PRODUCTION_CANARY.value else "not_run",
         "unauthorized_tool_calls": int(unauthorized),

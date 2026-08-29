@@ -6,20 +6,20 @@
   <string>com.ara.daily-market-scheduler</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/ara/Projects/新闻搜索/.venv/bin/python</string>
+    <string>/path/to/your/project/.venv/bin/python</string>
     <string>-m</string>
     <string>tools.scheduler</string>
     <string>run</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/ara/Projects/新闻搜索</string>
+  <string>/path/to/your/project</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>/Users/ara/Projects/新闻搜索/outputs/scheduler/launchd.out.log</string>
+  <string>/path/to/your/project/outputs/scheduler/launchd.out.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/ara/Projects/新闻搜索/outputs/scheduler/launchd.err.log</string>
+  <string>/path/to/your/project/outputs/scheduler/launchd.err.log</string>
 </dict>
 </plist>

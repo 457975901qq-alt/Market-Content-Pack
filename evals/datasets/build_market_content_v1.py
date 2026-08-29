@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build() -> dict:
-    categories = [("success", 10), ("ollama_output_anomaly", 5), ("gemini_fallback", 5), ("market_data_missing", 5), ("image_qa_renderer_failure", 5)]
+    categories = [("success", 10), ("ollama_output_anomaly", 5), ("gemini_fallback", 5), ("market_data_missing", 5), ("renderer_failure", 5)]
     project_root = Path(__file__).resolve().parents[3]
     historical_runs = sorted((project_root / "outputs" / "canary").glob("market_*")) + sorted((project_root / "runtime" / "shadow").glob("market_*"))
     cases = []

@@ -206,7 +206,6 @@ def _paths(output_root: Path, run_id: str, shadow: bool = False, legacy_shadow: 
         "content": output_root / "market_content",
         "github": output_root / "github_ai_projects",
         "sources": output_root / "market_sources",
-        "images": output_root / "images",
         "market_quotes": output_root / "market_sources" / "market_quotes.json",
         "logs": log_root,
         "review": review_root,
@@ -256,7 +255,6 @@ def _base_env(paths: dict[str, Path], edition: str, prompt_context: str, prompt_
         "MARKET_EDITION_CONTEXT": prompt_context,
         "MARKET_PROMPT_VERSION": prompt_version,
         "MARKET_CONTENT_PROVIDER": provider,
-        "MARKET_IMAGE_OUTPUT_DIR": str(paths["images"]),
         "STEP_TIMEOUT_SECONDS": str(policy.get("step_timeout_seconds", 600)),
     })
     return env
@@ -318,14 +316,7 @@ def _step_artifacts(paths: dict[str, Path], step: str) -> list[Path]:
     if step == "collect_market_quotes":
         return [paths["market_quotes"]]
     if step == "final_validation":
-        artifacts = [paths["logs"] / "qa_report.json"]
-        image_path = paths["images"] / "market_content.svg"
-        image_qa = paths["logs"] / "image_qa.json"
-        if image_path.exists():
-            artifacts.append(image_path)
-        if image_qa.exists():
-            artifacts.append(image_qa)
-        return artifacts
+        return [paths["logs"] / "qa_report.json"]
     if step == "build_review_package":
         return [paths["review"] / "review_package.json"]
     if step in {"reviewer_agent", "reviewer_gate"}:
@@ -346,8 +337,7 @@ def _write_review_package(state: dict, paths: dict[str, Path | bool], manifest_p
         "market_content_pack": str(paths["content"] / "market_content.json"),
         "validated_market_data": str(paths["market_quotes"]),
         "source_urls": [],
-        "output_mode": "image" if not state.get("text_only", True) else "text",
-        "image_files": [str(paths["images"] / "market_content.svg")] if not state.get("text_only", True) else [],
+        "output_mode": "text",
         "validation_report": str(paths["logs"] / "qa_report.json"),
         "quality_gate_result": manifest.get("qa_status"),
         "tool_decision_history": str(paths["logs"] / "commands.jsonl"),
@@ -437,8 +427,6 @@ def _write_manifest(state: dict, paths: dict[str, Path], qa_ok: bool, edition: s
         paths["sources"] / "normalized_materials.json",
         paths["sources"] / "filtered_materials.json",
         paths["sources"] / "source_status.json",
-        paths["images"] / "market_content.svg",
-        paths["logs"] / "image_qa.json",
     ]:
         if isinstance(target, Path) and target.exists() and target.is_file():
             artifact_hashes[target.name] = run_state.sha256(target)
@@ -464,8 +452,7 @@ def _write_manifest(state: dict, paths: dict[str, Path], qa_ok: bool, edition: s
         "artifact_hashes": artifact_hashes,
         "source_status": _read_json(paths["sources"] / "source_status.json") if (paths["sources"] / "source_status.json").exists() else {"status": "unavailable"},
         "qa_status": "pass" if qa_ok else "fail",
-        "mode": "image" if not state.get("text_only", True) else "text",
-        "image_qa_status": (_read_json(paths["logs"] / "image_qa.json").get("status") if (paths["logs"] / "image_qa.json").exists() else None),
+        "mode": "text",
         "external_publish": "removed",
         "run_mode": state.get("run_mode", RunMode.DRY_RUN.value),
         "run_mode_resolved_from": state.get("run_mode_resolved_from", "default"),
@@ -622,7 +609,6 @@ def _write_delivery_report(
         "run_id": state["run_id"],
         "qa_status": "pass" if qa_ok else "fail",
         "delivered": False,
-        "image_generation_enabled": manifest.get("image_generation_enabled", manifest.get("mode") == "image"),
         "external_publish_enabled": manifest.get("external_publish_enabled", manifest.get("external_publish") not in {None, "removed", "disabled", "off"}),
         "output_root": manifest.get("output_root") or state.get("output_root"),
         "content_path": str(content_path.resolve()),
@@ -718,9 +704,9 @@ def _legacy_execute(args: argparse.Namespace) -> int:
     _RUN_LOCK_CONTEXT = run_state.run_lock(run_id, state_root)
     _RUN_LOCK_CONTEXT.__enter__()
 
-    text_only = not args.enable_images
-    state["text_only"] = text_only
-    state["output_mode"] = "text" if text_only else "image"
+    text_only = True
+    state["text_only"] = True
+    state["output_mode"] = "text"
 
     started_at = datetime.fromisoformat(state["started_at"]) if args.resume and state.get("started_at") else None
     context = resolve_edition_context(args.edition, started_at=started_at)
@@ -744,7 +730,7 @@ def _legacy_execute(args: argparse.Namespace) -> int:
             scheduled_at=context.scheduled_cutoff.isoformat(),
             started_at=state["started_at"],
             prompt_version=context.prompt_version,
-            renderer_version="svg_renderer_v1" if not text_only else "disabled",
+            renderer_version="text_only_v1",
             delivery_enabled=False,
             checkpoint_resumed=bool(args.resume),
             metadata={"edition": args.edition, "timezone": "Asia/Tokyo"},
@@ -762,7 +748,7 @@ def _legacy_execute(args: argparse.Namespace) -> int:
     paths["plan"] = state_root / "plans" / f"{run_id}.json"
     paths["decisions"] = state_root / "decisions" / f"{run_id}.json"
     paths["decision_log"] = (paths["logs"] / "market_content_decisions.log") if shadow_mode else ROOT / "logs" / "market_content_decisions.log"
-    for key in ("content", "github", "sources", "images", "logs", "review", "shadow_root", "plan", "decisions", "decision_log"):
+    for key in ("content", "github", "sources", "logs", "review", "shadow_root", "plan", "decisions", "decision_log"):
         target = paths[key]
         target.parent.mkdir(parents=True, exist_ok=True)
         if key not in {"plan", "decisions", "decision_log"}:
@@ -1324,37 +1310,8 @@ def _legacy_execute(args: argparse.Namespace) -> int:
                 _write_text_qa_report(paths)
                 qa_ok = True
             artifacts = _step_artifacts(paths, step)
-            image_error = None
-            if result is not None and result.status is FunctionStatus.success and step == "final_validation" and not text_only:
-                from image_renderer import render_image_pack, validate_image_pack
-
-                image_path = paths["images"] / "market_content.svg"
-                image_qa_path = paths["logs"] / "image_qa.json"
-                try:
-                    if _OBSERVABILITY is not None:
-                        _OBSERVABILITY.stage_started("image_rendering", {"renderer_version": "svg_renderer_v1"})
-                    render_image_pack(function_context.content_path, paths["images"], state["run_id"])
-                    if _OBSERVABILITY is not None:
-                        _OBSERVABILITY.stage_finished("image_rendering", "success", metadata={"renderer_version": "svg_renderer_v1"})
-                    if _OBSERVABILITY is not None:
-                        _OBSERVABILITY.stage_started("image_qa", {"renderer_version": "svg_renderer_v1"})
-                    image_qa = validate_image_pack(image_path, function_context.content_path, state["run_id"])
-                    run_state.atomic_write_json(image_qa_path, image_qa)
-                    if image_qa.get("status") != "pass":
-                        if _OBSERVABILITY is not None:
-                            _OBSERVABILITY.stage_finished("image_qa", "failed", {"error_code": "image_qa_failed", "message": "image QA gate failed"})
-                        image_error = {"error_type": "quality_error", "error_code": "image_qa_failed", "step": step, "message": "image QA gate failed", "retryable": False}
-                    elif _OBSERVABILITY is not None:
-                        _OBSERVABILITY.stage_finished("image_qa", "success", metadata={"qa_status": "pass"})
-                except (OSError, ValueError, TypeError) as exc:
-                    if _OBSERVABILITY is not None:
-                        if "image_rendering" in _OBSERVABILITY._started:
-                            _OBSERVABILITY.stage_finished("image_rendering", "failed", {"error_type": type(exc).__name__, "message": str(exc), "traceback": __import__("traceback").format_exc()})
-                        elif "image_qa" in _OBSERVABILITY._started:
-                            _OBSERVABILITY.stage_finished("image_qa", "failed", {"error_code": "IMAGE_QA_FAILED", "error_type": type(exc).__name__, "message": str(exc), "traceback": __import__("traceback").format_exc()})
-                    image_error = {"error_type": "rendering_error", "error_code": "renderer_not_registered", "step": step, "message": str(exc), "retryable": False}
-            if result is None or result.status is not FunctionStatus.success or image_error:
-                error = image_error or (result.error.model_dump(mode="json") if result and result.error else {"error_type": "code_error", "error_code": "function_call_missing", "step": step, "message": "function chain did not return success", "retryable": False})
+            if result is None or result.status is not FunctionStatus.success:
+                error = result.error.model_dump(mode="json") if result and result.error else {"error_type": "code_error", "error_code": "function_call_missing", "step": step, "message": "function chain did not return success", "retryable": False}
                 _transition(state, step, "failed", state_root, transition_log, error=error, artifacts=artifacts)
                 state["delivered"] = False
                 run_state.save(state, state_root)
@@ -1477,7 +1434,7 @@ def _agent_runtime_paths(output_root: Path, run_id: str, *, shadow: bool, canary
         "decision_log": paths["logs"] / "agent_decisions.jsonl",
         "state_root": state_root,
     })
-    for key in ("content", "github", "sources", "images", "logs", "review", "plan", "decisions", "decision_log"):
+    for key in ("content", "github", "sources", "logs", "review", "plan", "decisions", "decision_log"):
         target = paths[key]
         target.parent.mkdir(parents=True, exist_ok=True)
         if key not in {"plan", "decisions", "decision_log"}:
@@ -1568,9 +1525,9 @@ def _execute_agent(args: argparse.Namespace) -> int:
         raise RuntimeError(f"run_lock_already_held:{run_id}")
     _RUN_LOCK_CONTEXT = run_state.run_lock(run_id, state_root)
     _RUN_LOCK_CONTEXT.__enter__()
-    text_only = not args.enable_images
-    state["text_only"] = text_only
-    state["output_mode"] = "text" if text_only else "image"
+    text_only = True
+    state["text_only"] = True
+    state["output_mode"] = "text"
     started_at = datetime.fromisoformat(state["started_at"]) if args.resume and state.get("started_at") else None
     context = resolve_edition_context(args.edition, started_at=started_at)
     if args.enforce_schedule and not is_schedule_slot(args.edition):
@@ -1605,7 +1562,7 @@ def _execute_agent(args: argparse.Namespace) -> int:
         RunContext(
             run_id=run_id, task_type="market_content", target_date=context.scheduled_cutoff.date().isoformat(), session=context.market_session,
             scheduled_at=context.scheduled_cutoff.isoformat(), started_at=state["started_at"], prompt_version=context.prompt_version,
-            renderer_version="disabled" if text_only else "svg_renderer_v1", delivery_enabled=False, checkpoint_resumed=bool(args.resume),
+            renderer_version="text_only_v1", delivery_enabled=False, checkpoint_resumed=bool(args.resume),
             metadata={"edition": args.edition, "timezone": "Asia/Tokyo", "controller": "DailyMarketAgent"},
         ), output_root, paths["logs"], thresholds=runtime_policy.get("monitoring") if isinstance(runtime_policy.get("monitoring"), dict) else None,
     )
@@ -1789,7 +1746,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-mode", choices=[item.value for item in RunMode], help="统一运行模式；与 shadow/canary 标志冲突时 fail-closed")
     parser.add_argument("--enforce-schedule", action="store_true", help="只允许在版本配置的本地调度时间窗口内运行")
     parser.add_argument("--shadow-run", action="store_true")
-    parser.add_argument("--enable-images", action="store_true", help="生成本地 SVG 图片并执行图片 QA；不启用外部发布")
     parser.add_argument("--canary-run", action="store_true", help="执行隔离 Self-Healing Canary；始终 dry-run，不发送")
     parser.add_argument("--run-id", help="可选的唯一运行 ID，格式为 market_YYYYMMDD_HHMM[_short_id]")
     parser.add_argument("--resume")
@@ -1824,8 +1780,6 @@ def main(argv: list[str] | None = None) -> int:
         runtime_policy = load_runtime_policy()
     except RuntimeError as exc:
         parser.error(str(exc))
-    if args.enable_images and not bool(runtime_policy.get("allow_image_generation", False)):
-        parser.error("image_generation_disabled_by_runtime_policy")
     os.environ["DRY_RUN"] = "true"
     started = time.monotonic()
     started_epoch = time.time()
